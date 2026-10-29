@@ -12,6 +12,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8,<10"]
 
+[project.scripts]
+stateguard-experiment = "stateguard.experiment:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

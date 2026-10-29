@@ -10,4 +10,4 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -e '.[dev]'
       - run: pytest -q
-      - run: python scripts/demo.py --db results/demo.sqlite3 --trace results/demo.json
+      - run: python scripts/run_phase1.py --output results/phase1-pilot --seed 7
