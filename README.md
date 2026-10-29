@@ -1,54 +1,216 @@
 # CSE 291A StateGuard
 
-CSE 291A Option 5：多智能体系统中的故障传播与状态一致性恢复。
+**Failure Propagation and State-Consistent Recovery in Multi-Agent Systems**
 
-这个仓库现在包含一个可重复执行的 Phase 1 deterministic pilot。它不是单条 happy-path demo：实验会执行三个分析 agent、Planner、Executor、版本化 SQLite 状态库、权限检查、四类故障、三个对照策略、最终 correctness checker，并导出逐次 trace 和汇总表。
+[![Tests](https://github.com/ashley-tech628/CSE291A-StateGuard/actions/workflows/tests.yml/badge.svg)](https://github.com/ashley-tech628/CSE291A-StateGuard/actions/workflows/tests.yml)
 
-## 当前实验覆盖
+StateGuard is a research prototype for studying how failures propagate through tool-using multi-agent systems and how affected work can be recovered without discarding valid computation or overwriting legitimate external changes.
 
-- 8 个部署任务变体
-- 1 个 clean condition
-- 4 类故障：incorrect result、stale result、timeout、adversarial message
-- 3 个策略：no recovery、full restart、always verify
-- 总计 8 × 5 × 3 = 120 场运行
-- full restart 会重建初始环境并重放合法管理员更新
-- adversarial write 会到达 Planner 和 Executor，但受控工具层拒绝 protected-field 修改
-- 每次状态写入、字段版本、result dependency、tool action 和 checker 结果写入 trace
+The project is developed for CSE 291A Option 5. It combines agent provenance, versioned shared state, controlled side effects, fault injection, and reproducible evaluation in a small software-deployment workflow.
 
-当前 backend 是固定结构化输出，用于验证 Phase 1 的执行和评估方法。simulated_tokens 是确定性成本单位，不是真实模型 token；不能作为 LLM 性能结论。下一步接真实模型时保留相同的数据契约和实验 runner。
+## Research Problem
 
-## 环境和运行
+Multi-agent systems pass intermediate results through messages, delegated tasks, and shared state. An incorrect or malicious result can influence a planner, trigger tool calls, and produce persistent changes before the original failure is detected.
 
-需要 Python 3.11+。
+Recovery is difficult because the environment may continue changing. Another agent may complete independent work, an administrator may update the same service, or a tool action may commit even when its acknowledgment is lost. Restoring an old snapshot can therefore erase valid work, while replaying every action can repeat non-idempotent side effects.
 
-Windows PowerShell：
+StateGuard investigates the following questions:
+
+1. How do faulty results propagate through message dependencies, state reads, and tool actions?
+2. Which completed results remain valid after a fault is identified?
+3. Can dependency-aware, state-aware recovery reduce recomputation while preserving correctness and legitimate external updates?
+4. What latency, inference cost, and tracking overhead are introduced by more precise recovery?
+
+## System Overview
+
+The experimental workflow models a small software deployment:
+
+    Config Agent --------\
+    Dependency Agent -----+--> Planner --> Executor --> Controlled Tools
+    Resource Agent -------/                         |
+                                                     v
+                                          Versioned Shared State
+                                                     |
+                                                     v
+                                             Correctness Checker
+
+The agents inspect service configuration, compatibility, and resource constraints. The planner combines their structured outputs into a deployment plan. The executor performs version-checked tool actions against an SQLite state store.
+
+StateGuard records four types of execution objects:
+
+- Agent results, including consumed upstream result IDs and state versions
+- Tool actions, including expected versions, write sets, and effect classes
+- State events, including before and after versions
+- External events, including legitimate administrator or concurrent-agent updates
+
+Together, these objects form a typed execution graph with consumes, reads-from, produces-write, and triggers relationships.
+
+## Key Design Principles
+
+### Explicit provenance
+
+Dependencies are recorded during execution rather than inferred afterward by an LLM. A result identifies the specific upstream results and field versions it actually used.
+
+### Field-level state versions
+
+Each mutable field has its own version. Independent updates can therefore be distinguished from conflicting updates without invalidating an entire configuration object.
+
+### Transactional event recording
+
+A controlled state write, its version transition, and its committed event are stored in one SQLite transaction. The state and trace cannot silently diverge.
+
+### Idempotent tool execution
+
+Stable action IDs prevent duplicate writes when a tool commits successfully but its acknowledgment is lost. Reusing an action ID with different arguments is rejected.
+
+### Conservative recovery
+
+Missing provenance, conflicting versions, and irreversible side effects are reported explicitly. Recovery outcomes are classified as complete, partial, or blocked rather than treating recomputation alone as successful recovery.
+
+## Project Phases
+
+### Phase 1: Failure Propagation and Baselines
+
+Phase 1 establishes a clean workflow, injects controlled faults, records their propagation, and compares baseline policies.
+
+Fault classes include:
+
+- Incorrect intermediate results
+- Stale results based on outdated state or documentation
+- Timeouts and lost acknowledgments
+- Adversarial intermediate messages
+
+Accidental and adversarial faults are reported separately. A fault counts as propagated only when a downstream stage actually consumes it.
+
+The Phase 1 comparison includes:
+
+- No recovery
+- Full restart with valid external-event replay
+- Always verify with bounded retry
+
+### Phase 2: Selective Recovery
+
+Phase 2 will implement and compare two selective recovery policies:
+
+- Dependency-only replay, which invalidates downstream results using result dependencies
+- State-aware selective recovery, which also validates field versions, tool effects, external updates, and action-ledger state
+
+The planned recovery procedure is:
+
+1. Receive the known faulty result ID from the experiment harness.
+2. Traverse downstream result and state dependencies.
+3. Identify committed actions and potentially affected fields.
+4. Compare recorded reads and writes with the current environment.
+5. Reuse results whose required dependencies remain valid.
+6. Recompute invalid results and generate actions against the current state.
+7. Execute conditional writes with expected versions and stable action IDs.
+8. Run the final task and safety checkers.
+9. Report complete, partial, or blocked recovery with supporting trace evidence.
+
+Fault detection is intentionally separated from recovery in the core evaluation. Automated detection is an optional extension and must report false positives and missed faults independently.
+
+## Current Implementation Status
+
+| Component | Status |
+| --- | --- |
+| Shared result, action, event, and fault schemas | Implemented |
+| SQLite field-level versions | Implemented |
+| Atomic state and event transactions | Implemented |
+| Action ledger and idempotent retries | Implemented |
+| Config, Dependency, and Resource agents | Deterministic implementation |
+| Planner and Executor | Deterministic implementation |
+| Controlled authorization checks | Implemented |
+| Incorrect, stale, timeout, and adversarial injection | Implemented |
+| No-recovery baseline | Implemented |
+| Full-restart baseline with external-event replay | Implemented |
+| Always-verify baseline | Implemented |
+| Trace, SQLite, CSV, and JSON export | Implemented |
+| Real LLM adapter and structured-output validation | Planned |
+| End-to-end lost-acknowledgment experiment | Planned |
+| Dependency topology expansion | Planned |
+| Dependency-only selective recovery | Phase 2 |
+| State-aware selective recovery | Phase 2 |
+| Recovery ablations and conflict-density experiments | Phase 2 |
+
+## Deterministic Pilot
+
+The current deterministic pilot validates the experiment harness before real model inference is introduced.
+
+It runs:
+
+- 8 deployment task variants
+- 1 clean condition
+- 4 injected fault conditions
+- 3 baseline policies
+- 120 total experiment runs
+
+For seed 7:
+
+- All 24 clean runs succeeded.
+- Incorrect ports and stale protocols caused failures under no recovery.
+- Timeout faults stopped at the Config Agent.
+- All adversarial protected-field writes were rejected by the tool layer.
+- Full restart produced a correct final state in all 32 fault scenarios and preserved the administrator update.
+- Always verify corrected all 32 faults before planner consumption.
+- Unauthorized committed actions were zero under every policy.
+- The repository contains 17 passing automated tests.
+
+The deterministic backend uses fixed structured outputs. The simulated token values are cost units for testing metrics and are not measured LLM tokens or evidence of model performance.
+
+## Evaluation
+
+The full evaluation will measure:
+
+| Category | Metrics |
+| --- | --- |
+| Task quality | Clean success, recovered correctness, invariant satisfaction |
+| Propagation | Consumed faults, affected results, affected fields, committed actions |
+| Safety | Unauthorized attempts, unauthorized commits, residual effects |
+| Recovery precision | Necessary invalidations, stale reuse, retained valid work |
+| Cost | Recomputed stages, model calls, tokens, tool calls, wall-clock latency |
+| Overhead | Clean-run tracking latency, log size, version checks |
+| Conflict handling | Prevented lost updates, replanning, partial and blocked recoveries |
+
+Real LLM experiments will use fixed model configurations and multiple seeds. Results will report means, failure details, confidence intervals, and p50/p95 latency.
+
+## Installation
+
+StateGuard requires Python 3.11 or later.
+
+### Windows PowerShell
 
     py -3.11 -m venv .venv
     .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
     .\.venv\Scripts\python.exe -m pytest -q
-    .\.venv\Scripts\python.exe scripts\run_phase1.py --output results\phase1-pilot --seed 7
 
-macOS/Linux：
+### macOS and Linux
 
     python3.11 -m venv .venv
     .venv/bin/python -m pip install -e ".[dev]"
     .venv/bin/python -m pytest -q
-    .venv/bin/python scripts/run_phase1.py --output results/phase1-pilot --seed 7
 
-安装后也可以运行：
+## Running the Current Experiment
+
+Run the deterministic experiment matrix:
 
     stateguard-experiment --output results/phase1-pilot --seed 7
 
-runner 每次会清理指定的 output directory，因此不要把手工文件放入该目录。
+Alternatively:
 
-## 实验输出
+    python scripts/run_phase1.py --output results/phase1-pilot --seed 7
 
-- results/phase1-pilot/summary.csv：120 场运行的逐场指标
-- results/phase1-pilot/report.json：按策略汇总的 clean success、fault success、调用成本与安全指标
-- results/phase1-pilot/runs/<scenario>/trace.json：结果依赖、验证、动作、事件、最终状态与 checker
-- results/phase1-pilot/runs/<scenario>/*.sqlite3：每个 attempt 的版本化状态和 action ledger
+The runner cleans only output directories that contain a StateGuard ownership marker. It refuses to clean a nonempty directory that it did not create.
 
-一条故障 trace 的关键链路是：
+## Experiment Artifacts
+
+A complete run produces:
+
+- <code>summary.csv</code>: per-run task, propagation, safety, and cost metrics
+- <code>report.json</code>: aggregate metrics grouped by policy
+- <code>runs/&lt;scenario&gt;/trace.json</code>: results, dependencies, verification decisions, actions, state events, final state, and checker output
+- <code>runs/&lt;scenario&gt;/*.sqlite3</code>: versioned state and action ledger for each attempt
+
+The central trace chain is:
 
     faulty AgentResult
       -> Planner.parent_result_ids
@@ -56,46 +218,49 @@ runner 每次会清理指定的 output directory，因此不要把手工文件�
       -> StateEvent(action_id, before_version, after_version)
       -> final checker
 
-fault_consumed 只有在 Planner 实际使用了故障结果时才为 true。timeout 在上游停止，always verify 检出的错误会重试，因此不会被误报为传播成功。
+The <code>fault_consumed</code> metric is true only when the planner actually uses the faulty result.
 
-## 当前已验证结果
+## Repository Structure
 
-在 seed 7 的 120 场 pilot 中：
+- <code>src/stateguard/schemas.py</code>: shared data contracts
+- <code>src/stateguard/state.py</code>: versioned SQLite state, events, and idempotency
+- <code>src/stateguard/workflow.py</code>: agents, planner, executor, faults, and checkers
+- <code>src/stateguard/experiment.py</code>: workloads, baselines, metrics, and artifact export
+- <code>scripts/run_phase1.py</code>: experiment entry point
+- <code>tests/test_state.py</code>: state version and idempotency tests
+- <code>tests/test_experiment.py</code>: propagation, authorization, baseline, and matrix tests
+- <code>.github/workflows/tests.yml</code>: continuous integration
 
-- 所有 24 个 clean run 全部成功。
-- no recovery 的 32 个故障场景中，错误端口和 stale protocol 造成失败，timeout 停在 Config Agent，8 个 adversarial 场景由工具层阻断后仍完成合法任务。
-- full restart 的 32 个故障场景全部得到正确最终状态，并保留 worker 管理员扩容。
-- always verify 的 32 个故障场景全部在 Planner 消费前被修正；没有越权工具尝试。
-- 所有策略中 unauthorized commits 均为 0。
+## Roadmap
 
-这些是 deterministic pilot 结果，只证明实验 harness、传播路径、baseline 语义和 checker 工作正常。真实 LLM 实验需要另外报告模型、prompt、temperature、真实 token、延迟和重复运行统计。
+### Near-term Phase 1 work
 
-## 代码结构
+- Add a real model adapter and structured-output validation
+- Record prompts, responses, model configuration, actual tokens, and retries
+- Add planner faults, executor faults, tool failures, and lost acknowledgments
+- Add chain, fan-out, diamond, independent-branch, and ignored-result workflows
+- Run multiple seeds and produce the Phase 1 analysis and figures
 
-- src/stateguard/schemas.py：共享的 AgentResult、ToolAction、StateEvent 和 FaultSpec
-- src/stateguard/state.py：SQLite 字段版本、原子事件记录和 action-id 幂等
-- src/stateguard/workflow.py：分析 agents、Planner、Executor、故障和 checker
-- src/stateguard/experiment.py：120 场矩阵、full restart、always verify 和结果导出
-- tests/test_state.py：状态冲突和幂等测试
-- tests/test_experiment.py：故障传播、权限、baseline、外部更新与完整矩阵测试
+### Phase 2 work
 
-## Phase 1 分工
+- Build the typed dependency graph and impact analyzer
+- Implement dependency-only replay
+- Implement version validation and state-aware reuse
+- Add safe replay, conditional compensation, and blocked-recovery reporting
+- Compare policies under unrelated updates, same-field conflicts, and shared-resource conflicts
+- Measure invalidation precision, retained valid work, stale reuse, and recovery overhead
+- Run ablations for provenance precision, version checks, and action-ID deduplication
 
-| 负责人 | 主要 ownership | 下一步 |
-| --- | --- | --- |
-| 你：runtime、state、tracing | schema、字段版本、action ledger、trace、full restart | 加真实 model adapter；扩展 provenance/成本统计 |
-| 队友 A：workflow、tools | 三分析 agent、Planner/Executor、结构化工具 | 用真实模型替换 deterministic backend；保留 schema |
-| 队友 B：fault、evaluation | workload、fault schedule、checker、always verify、分析 | 扩大 seed；生成图表和 Phase 1 报告 |
+## Team Workstreams
 
-三人先审查 schemas.py 和 trace JSON，再各自开分支。任何 schema 变化必须同时更新 runner、checker 和测试。
+| Workstream | Primary responsibilities |
+| --- | --- |
+| Model and workflow | Model adapter, prompts, structured results, and workflow integration |
+| Faults and evaluation | Workloads, fault schedules, checkers, metrics, plots, and analysis |
+| Runtime and recovery | State versions, provenance, action ledger, baselines, selective recovery, and integration |
 
-## Phase 1 完成标准
+The team should review the shared schemas and a representative trace before developing separate branches. Schema changes must update the runner, checker, trace format, and tests together.
 
-1. 固定模型配置后，clean workflow 能稳定完成。
-2. 每类故障都有匹配 clean run，并确认故障是否被实际消费。
-3. accidental 和 adversarial 分开报告。
-4. no recovery、full restart、always verify 使用相同任务、故障 schedule 和资源预算。
-5. 保存 seed、模型配置、trace、最终状态、失败原因和汇总指标。
-6. 至少重复多个 seed，报告真实 token、p50/p95 latency 和失败明细。
+## Scope
 
-当前仓库已经完成前四项的 deterministic 版本和完整导出链路。接入真实 LLM、重复 seed 和统计分析后，才是可用于课程结论的 Phase 1 正式实验。
+StateGuard is a research prototype, not a production deployment system. The core implementation uses controlled tools and SQLite so that dependencies, side effects, and recovery decisions remain programmatically checkable. Docker-based service validation, additional models, automated fault detection, browser rollback, and microVM snapshots are optional extensions rather than prerequisites for the core study.
