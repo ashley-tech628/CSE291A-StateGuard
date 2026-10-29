@@ -1,4 +1,4 @@
-# StateGuard
+# CSE 291A StateGuard
 
 CSE 291A Option 5：多智能体系统中的故障传播与状态一致性恢复。
 
