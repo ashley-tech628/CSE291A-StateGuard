@@ -1,4 +1,9 @@
-"""Deterministic Phase 1 multi-agent workflow and controlled fault injection."""
+"""Phase 1 workflow with optional real-model Config Agent and fault injection.
+
+Pass config_model=ModelAdapter() to WorkflowRunner to enable real inference
+for Config only. Other stages remain deterministic. Default behavior is unchanged.
+ModelAdapter is imported by the caller, so deterministic runs need no API key.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +43,7 @@ class AttemptTrace:
     inference_calls: int = 0
     simulated_tokens: int = 0
     latency_ms: float = 0.0
+    model_calls: list[dict[str, Any]] = field(default_factory=list)
     fault_consumed: bool = False
     affected_stages: list[str] = field(default_factory=list)
 
@@ -65,6 +71,7 @@ class WorkflowRunner:
         self, *, task: DeploymentTask, fault: FaultType, policy: Policy,
         db_path: Path, attempt_id: str, seed: int,
         replay_external_event: bool = False,
+        config_model: Any = None,
     ) -> None:
         self.task = task
         self.fault = fault
@@ -73,6 +80,7 @@ class WorkflowRunner:
         self.attempt_id = attempt_id
         self.seed = seed
         self.replay_external_event = replay_external_event
+        self.config_model = config_model
         self.backend = DeterministicAgentBackend()
         self.trace = AttemptTrace(attempt_id=attempt_id)
         self._faulty_result_ids: set[str] = set()
@@ -131,17 +139,74 @@ class WorkflowRunner:
                 if not valid:
                     results[name] = self._retry_clean(name, store)
 
-        if results["config"].status == "timeout":
-            self.trace.affected_stages.append("config")
+        failed = [
+            name for name, result in results.items()
+            if result.status != "ok"
+        ]
+        if failed:
+            self.trace.affected_stages.extend(failed)
             return None
         return results
 
     def _config_agent(self, store: StateStore, clean: bool = False) -> AgentResult:
-        self.backend.charge("config")
         db_port = store.read("database.port")
         status: Literal["ok", "error", "timeout"] = "ok"
-        content: dict[str, Any] = {"db_port": db_port.value}
-        if not clean:
+        latency_ms = 0.0
+
+        if self.config_model is None:
+            self.backend.charge("config")
+            content = {"db_port": db_port.value}
+            tokens = DeterministicAgentBackend.COSTS["config"]
+        else:
+            self.backend.calls += 1
+            started = perf_counter()
+            tokens = 0
+            content = {}
+
+            try:
+                call = self.config_model.generate_json(
+                    system_prompt=(
+                        "You are the Config Agent for a deployment workflow. "
+                        "The API must connect to the database's listening port. "
+                        "Read the supplied database configuration and return "
+                        'exactly one field: {"db_port": integer}.'
+                    ),
+                    input_data={"database": {"port": db_port.value}},
+                )
+            except Exception as exc:
+                status = "error"
+                call = {
+                    "error": f"Model request failed: {type(exc).__name__}",
+                    "latency_ms": (perf_counter() - started) * 1000,
+                }
+            else:
+                candidate = call["parsed"]
+                valid = (
+                    call["error"] is None
+                    and isinstance(candidate, dict)
+                    and set(candidate) == {"db_port"}
+                    and type(candidate["db_port"]) is int
+                    and 1 <= candidate["db_port"] <= 65535
+                )
+                if valid:
+                    content = dict(candidate)
+                else:
+                    status = "error"
+                    call["error"] = (
+                        call["error"] or "Invalid Config Agent output schema"
+                    )
+                usage = call.get("usage") or {}
+                tokens = usage.get("total_tokens") or 0
+
+            latency_ms = call["latency_ms"]
+            self.trace.model_calls.append({
+                "agent_id": "config",
+                "call_number": self.backend.calls,
+                **call,
+            })
+
+        # Schema validation precedes injection. Semantic checking is separate.
+        if status == "ok" and not clean:
             if self.fault == "incorrect":
                 content["db_port"] = 3306
             elif self.fault == "timeout":
@@ -156,7 +221,7 @@ class WorkflowRunner:
             result_id=f"{self.attempt_id}-config-{self.backend.calls}",
             agent_id="config", parent_result_ids=(),
             read_set={"database.port": db_port.version}, content=content,
-            status=status, tokens=DeterministicAgentBackend.COSTS["config"],
+            status=status, tokens=tokens, latency_ms=latency_ms,
         ))
 
     def _dependency_agent(self, store: StateStore, clean: bool = False) -> AgentResult:
