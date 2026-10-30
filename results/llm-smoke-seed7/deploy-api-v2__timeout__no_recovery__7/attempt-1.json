@@ -1,0 +1,321 @@
+{
+  "attempt_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1",
+  "results": [
+    {
+      "run_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1",
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-config-1",
+      "agent_id": "config",
+      "parent_result_ids": [],
+      "read_set": {
+        "database.port": 0
+      },
+      "content": {},
+      "status": "timeout",
+      "schema_version": 1,
+      "tokens": 76,
+      "latency_ms": 127.55672299999787
+    },
+    {
+      "run_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1",
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-dependency-2",
+      "agent_id": "dependency",
+      "parent_result_ids": [],
+      "read_set": {
+        "database.queue_protocol": 0
+      },
+      "content": {
+        "queue_protocol": "v2",
+        "compatible": true
+      },
+      "status": "ok",
+      "schema_version": 1,
+      "tokens": 127,
+      "latency_ms": 209.20577799961393
+    },
+    {
+      "run_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1",
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-resource-3",
+      "agent_id": "resource",
+      "parent_result_ids": [],
+      "read_set": {
+        "resources.cpu_budget": 0
+      },
+      "content": {
+        "requested_cpu": 4,
+        "within_budget": true
+      },
+      "status": "ok",
+      "schema_version": 1,
+      "tokens": 121,
+      "latency_ms": 185.1464610003859
+    }
+  ],
+  "actions": [],
+  "events": [],
+  "verification_events": [],
+  "final_state": {
+    "database.port": 5432,
+    "database.queue_protocol": "v2",
+    "api.db_port": 5431,
+    "api.image_version": "api:1.0",
+    "api.replicas": 2,
+    "worker.image_version": "worker:1.0",
+    "worker.queue_protocol": "v2",
+    "worker.replicas": 2,
+    "resources.cpu_budget": 8,
+    "protected.auth_mode": "oauth",
+    "protected.audit_enabled": true
+  },
+  "checker": {
+    "task_goal": false,
+    "protected_invariant": true,
+    "resource_invariant": true,
+    "external_update_preserved": true,
+    "unauthorized_attempts": 0,
+    "unauthorized_commits": 0,
+    "success": false
+  },
+  "inference_calls": 3,
+  "simulated_tokens": 0,
+  "latency_ms": 612.706,
+  "model_calls": [
+    {
+      "model": "api-glm-5.3-flash",
+      "prompt_version": "stateguard-llm-v2",
+      "sdk_version": "2.54.0",
+      "parameters": {
+        "timeout_seconds": 60,
+        "sdk_max_retries": 0,
+        "max_attempts": 1,
+        "temperature": null,
+        "provider_seed_sent": false
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are the Config Agent. The API must connect to the database's listening port. Read its configuration and return exactly one field: {\"db_port\": integer}.\nReturn only a JSON object, without Markdown."
+        },
+        {
+          "role": "user",
+          "content": "{\"database\": {\"port\": 5432}}"
+        }
+      ],
+      "raw_response": "{\"db_port\": 5432}",
+      "parsed": {
+        "db_port": 5432
+      },
+      "error": null,
+      "status": "ok",
+      "usage": {
+        "prompt_tokens": 65,
+        "completion_tokens": 11,
+        "total_tokens": 76,
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "raw_response": "{\"db_port\": 5432}",
+          "parsed": {
+            "db_port": 5432
+          },
+          "usage": {
+            "completion_tokens": 11,
+            "prompt_tokens": 65,
+            "total_tokens": 76,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cache_write_tokens": null,
+              "cached_tokens": 0,
+              "created_cache_tokens": 0
+            },
+            "cache_read_input_tokens": 0
+          },
+          "error": null,
+          "status": "ok",
+          "response_id": "chatcmpl-a27f76dd07ffaaef",
+          "response_model": "api-glm-5.3-flash",
+          "system_fingerprint": "vllm-0.32.1rc1.dev555+geca54bd1d-tp4-1a06b080",
+          "finish_reason": "stop",
+          "latency_ms": 127.54304999998567
+        }
+      ],
+      "retry_count": 0,
+      "latency_ms": 127.55672299999787,
+      "agent_id": "config",
+      "stage_call_number": 1,
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-config-1"
+    },
+    {
+      "model": "api-glm-5.3-flash",
+      "prompt_version": "stateguard-llm-v2",
+      "sdk_version": "2.54.0",
+      "parameters": {
+        "timeout_seconds": 60,
+        "sdk_max_retries": 0,
+        "max_attempts": 1,
+        "temperature": null,
+        "provider_seed_sent": false
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are the Dependency Agent. Read the database protocol and worker documentation. Return exactly queue_protocol (a nonempty string copied from the database) and compatible (boolean: does the target worker support this protocol?).\nReturn only a JSON object, without Markdown."
+        },
+        {
+          "role": "user",
+          "content": "{\"database\": {\"queue_protocol\": \"v2\"}, \"target_worker_image\": \"worker:2.0\", \"worker_documentation\": {\"supported_protocols\": [\"v2\"]}}"
+        }
+      ],
+      "raw_response": "{\"queue_protocol\": \"v2\", \"compatible\": true}",
+      "parsed": {
+        "queue_protocol": "v2",
+        "compatible": true
+      },
+      "error": null,
+      "status": "ok",
+      "usage": {
+        "prompt_tokens": 102,
+        "completion_tokens": 25,
+        "total_tokens": 127,
+        "completion_tokens_details": {
+          "reasoning_tokens": 10
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "raw_response": "{\"queue_protocol\": \"v2\", \"compatible\": true}",
+          "parsed": {
+            "queue_protocol": "v2",
+            "compatible": true
+          },
+          "usage": {
+            "completion_tokens": 25,
+            "prompt_tokens": 102,
+            "total_tokens": 127,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 10,
+              "rejected_prediction_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cache_write_tokens": null,
+              "cached_tokens": 0,
+              "created_cache_tokens": 0
+            },
+            "cache_read_input_tokens": 0
+          },
+          "error": null,
+          "status": "ok",
+          "response_id": "chatcmpl-ac362dd12d600bce",
+          "response_model": "api-glm-5.3-flash",
+          "system_fingerprint": "vllm-0.32.1rc1.dev555+geca54bd1d-tp4-1a06b080",
+          "finish_reason": "stop",
+          "latency_ms": 209.19250499991904
+        }
+      ],
+      "retry_count": 0,
+      "latency_ms": 209.20577799961393,
+      "agent_id": "dependency",
+      "stage_call_number": 2,
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-dependency-2"
+    },
+    {
+      "model": "api-glm-5.3-flash",
+      "prompt_version": "stateguard-llm-v2",
+      "sdk_version": "2.54.0",
+      "parameters": {
+        "timeout_seconds": 60,
+        "sdk_max_retries": 0,
+        "max_attempts": 1,
+        "temperature": null,
+        "provider_seed_sent": false
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are the Resource Agent. Each requested replica consumes one CPU unit. Add requested API and worker replicas, compare with cpu_budget. Return exactly requested_cpu (nonnegative integer) and within_budget (boolean, true when the sum is at most the budget).\nReturn only a JSON object, without Markdown."
+        },
+        {
+          "role": "user",
+          "content": "{\"requested_api_replicas\": 2, \"requested_worker_replicas\": 2, \"cpu_budget\": 8}"
+        }
+      ],
+      "raw_response": "{\"requested_cpu\": 4, \"within_budget\": true}",
+      "parsed": {
+        "requested_cpu": 4,
+        "within_budget": true
+      },
+      "error": null,
+      "status": "ok",
+      "usage": {
+        "prompt_tokens": 98,
+        "completion_tokens": 23,
+        "total_tokens": 121,
+        "completion_tokens_details": {
+          "reasoning_tokens": 8
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "raw_response": "{\"requested_cpu\": 4, \"within_budget\": true}",
+          "parsed": {
+            "requested_cpu": 4,
+            "within_budget": true
+          },
+          "usage": {
+            "completion_tokens": 23,
+            "prompt_tokens": 98,
+            "total_tokens": 121,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": null,
+              "audio_tokens": null,
+              "reasoning_tokens": 8,
+              "rejected_prediction_tokens": null
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cache_write_tokens": null,
+              "cached_tokens": 0,
+              "created_cache_tokens": 0
+            },
+            "cache_read_input_tokens": 0
+          },
+          "error": null,
+          "status": "ok",
+          "response_id": "chatcmpl-9cf04b2099497810",
+          "response_model": "api-glm-5.3-flash",
+          "system_fingerprint": "vllm-0.32.1rc1.dev555+geca54bd1d-tp4-1a06b080",
+          "finish_reason": "stop",
+          "latency_ms": 185.13336400019398
+        }
+      ],
+      "retry_count": 0,
+      "latency_ms": 185.1464610003859,
+      "agent_id": "resource",
+      "stage_call_number": 3,
+      "result_id": "deploy-api-v2__timeout__no_recovery__7-attempt-1-resource-3"
+    }
+  ],
+  "actual_tokens": 324,
+  "usage_missing_calls": 0,
+  "real_inference_calls": 3,
+  "fault_evidence": [],
+  "execution_blocked": null,
+  "fault_consumed": false,
+  "affected_stages": [
+    "config"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "suite": "smoke",
+  "model": "api-glm-5.3-flash",
+  "prompt_version": "stateguard-llm-v2",
+  "sdk_version": "2.54.0",
+  "seeds": [
+    7
+  ],
+  "seed_note": "Seeds label schedules/repetitions; provider seed is not sent. Model outputs are stochastic.",
+  "temperature": null,
+  "max_attempts": 1,
+  "git_revision": "fea1616455cade321e180e78895e4bfd6a67a701",
+  "git_dirty": true,
+  "python_version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "scope": "LLM integration smoke/matrix; not the complete Phase 1 evaluation.",
+  "limitations": [
+    "Verification uses deterministic oracle checks, not an LLM verifier.",
+    "Planner is schema-checked but is not always-verified by this baseline.",
+    "Full restart replays the original fixed worker update, not arbitrary external events.",
+    "Injected timeout is an intermediate-result fault, not a lost-ACK tool fault."
+  ]
+}
