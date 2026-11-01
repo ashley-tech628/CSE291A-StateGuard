@@ -16,11 +16,21 @@ claim to detect arbitrary faulty agents automatically.
   affected results, actions, events, and field versions.
 - `assess_recovery` compares recorded read versions to the current SQLite state,
   invalidates descendants, identifies reusable results, and flags a later write
-  to a field touched by an affected action. It also flags irreversible actions.
+  to a field touched by an affected action. It also identifies irreversible
+  actions so a corrected final state can be reported as partial recovery.
   Passing preflight permits an attempted conditional replay; it is not evidence
   of completed recovery.
 - `scripts/inspect_provenance.py` exports the graph, impact set, and (when the
   attempt database is present) the recovery preflight from a paired experiment.
+- `recover_selectively` reuses valid analysis results, recomputes invalid agents
+  and the planner, and writes only changed fields. Versions are captured before
+  planning and passed to conditional SQLite updates. A concurrent change or
+  same-field administrator update yields `blocked` without overwriting it.
+  The final checker sees both the original attempt and recovery actions.
+- The paired `full_restart` policy now performs a second clean attempt in a
+  fresh database. It replays the actual external events recorded by the first
+  attempt in order, checks each event's old value and version, and includes
+  both attempts in cost metrics. A changed replay precondition is `blocked`.
 
 The graph is deliberately conservative at result granularity. The planner
 records all three input result IDs, so a change to an unused field may still
@@ -35,6 +45,8 @@ python -m pip install -r requirements-eval.txt
 pytest -q
 python scripts/run_paired_experiment.py --output results/paired --seed 7
 python scripts/inspect_provenance.py results/paired/pairs/incorrect-db-port-3306__no_recovery__seed-7/paired.json --output results/paired/incorrect-port-impact.json
+python scripts/run_paired_experiment.py --policy full_restart --cases incorrect-db-port-3306 --output results/full-restart --no-figures
+python scripts/run_paired_experiment.py --policy selective_recovery --cases incorrect-db-port-3306 --output results/selective --no-figures
 ```
 
 The incorrect-port case should invalidate the Config result and Planner, link
@@ -47,10 +59,30 @@ conflict; the preflight will decline automatic replay.
 Generated `results/` files and SQLite databases are ignored by Git. Share an
 experiment artifact separately when another team member must audit it.
 
-## Next implementation boundary
+## Custom external event schedule
 
-The selective replay executor still needs to recompute invalid results, issue
-new conditional tool writes, validate side effects and external updates, and
-run the final checker before reporting complete, partial, or blocked recovery.
-The current full-restart baseline replays one fixed worker-scale event; a
-general external-event schedule and replay mechanism remains to be built.
+Pass `--external-events schedule.json` to the paired runner. The file contains
+an ordered list, for example:
+
+```json
+[
+  {"key": "worker.replicas", "value": 3, "actor": "admin"},
+  {"key": "api.replicas", "value": 4, "actor": "admin"}
+]
+```
+
+The runner applies these updates after the deployment attempt and records the
+actual value/version transitions. Full restart replays those recorded events,
+not the input list alone. Early blocked attempts under a recovery policy still
+record the scheduled administrator updates. An event whose original pre-state
+cannot be reproduced stops replay, and the final checker reports failure.
+
+## Limits
+
+This is a controlled SQLite workflow. Conditional writes do not undo an
+irreversible external service action. Such effects remain visible and recovery
+is reported as partial if the final task can otherwise be corrected. The default
+workload only performs reversible configuration writes. The
+planner names whole analysis results as parents, so invalidation can be
+conservative when only an unused field is faulty. Arbitrary browser state,
+remote APIs, and automatic fault detection remain outside this implementation.

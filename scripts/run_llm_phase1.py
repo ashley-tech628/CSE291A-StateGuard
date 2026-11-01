@@ -10,7 +10,7 @@ from pathlib import Path
 from time import perf_counter
 
 from stateguard.model_adapter import ModelAdapter
-from stateguard.workflow import DeploymentTask, WorkflowRunner
+from stateguard.workflow import DeploymentTask, ExternalUpdate, WorkflowRunner
 
 SMOKE_CASES = [
     ("none", "no_recovery"),
@@ -61,7 +61,7 @@ def main():
         "scope": "LLM integration smoke/matrix; not the complete Phase 1 evaluation.",
         "limitations": ["Verification uses deterministic oracle checks, not an LLM verifier.",
                         "Planner is schema-checked but is not always-verified by this baseline.",
-                        "Full restart replays the original fixed worker update, not arbitrary external events.",
+                        "Full restart replays recorded simulated external events with version checks.",
                         "Injected timeout is an intermediate-result fault, not a lost-ACK tool fault."],
     }, indent=2), encoding="utf-8")
     rows = []
@@ -74,11 +74,17 @@ def main():
                 attempts = []
                 started = perf_counter()
                 for number in range(1, 3 if policy == "full_restart" and fault != "none" else 2):
+                    external_log = None
+                    if number > 1:
+                        external_log = tuple(
+                            ExternalUpdate.from_event(event) for event in attempts[0].events
+                            if event["actor"] != "executor"
+                        )
                     runner = WorkflowRunner(
                         task=task, fault=fault if number == 1 else "none", policy=policy,
                         db_path=folder / f"attempt-{number}.sqlite3",
                         attempt_id=f"{name}-attempt-{number}", seed=seed,
-                        replay_external_event=number > 1, model_adapter=adapter,
+                        external_updates=external_log, model_adapter=adapter,
                     )
                     trace = runner.run()
                     attempts.append(trace)

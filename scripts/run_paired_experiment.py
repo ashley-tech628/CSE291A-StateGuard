@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from stateguard.analysis import analyse
@@ -20,6 +21,7 @@ from stateguard.fault_runner import run_paired, write_paired_artifacts
 from stateguard.faults import CASE_LIBRARY, get_case
 from stateguard.metrics import paired_row, write_summary_csv
 from stateguard.workloads import default_task, find_task
+from stateguard.workflow import ExternalUpdate
 
 MARKER = ".stateguard-generated"
 
@@ -38,7 +40,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("results/paired"))
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--policy", default="no_recovery",
-                        choices=["no_recovery", "full_restart", "always_verify"])
+                        choices=["no_recovery", "full_restart", "always_verify",
+                                 "selective_recovery"])
     parser.add_argument("--task", help="task_id; defaults to the first pilot workload")
     parser.add_argument("--cases", nargs="*", help="case ids; defaults to the whole library")
     parser.add_argument("--no-figures", action="store_true")
@@ -48,11 +51,22 @@ def main() -> None:
     parser.add_argument("--model", help="model id; defaults to STATEGUARD_MODEL")
     parser.add_argument("--max-attempts", type=int, default=1)
     parser.add_argument("--temperature", type=float)
+    parser.add_argument("--external-events", type=Path,
+                        help='JSON list of {"key": ..., "value": ..., "actor": "admin"} updates')
     args = parser.parse_args()
 
     task = find_task(args.task) if args.task else default_task()
     cases = [get_case(name) for name in args.cases] if args.cases else list(CASE_LIBRARY)
     root = prepare_output(args.output)
+    external_updates = None
+    if args.external_events:
+        records = json.loads(args.external_events.read_text(encoding="utf-8"))
+        if not isinstance(records, list) or not all(isinstance(item, dict) for item in records):
+            parser.error("--external-events must contain a JSON list of objects")
+        try:
+            external_updates = tuple(ExternalUpdate(**item) for item in records)
+        except (TypeError, ValueError) as exc:
+            parser.error(f"invalid external event: {exc}")
 
     adapter = None
     if args.llm:
@@ -75,6 +89,8 @@ def main() -> None:
         "temperature": args.temperature if adapter else None,
         "python_version": sys.version,
         "design": "paired clean/fault; the clean run is the control for each case",
+        "external_updates": [asdict(update) for update in external_updates]
+                            if external_updates is not None else None,
         "seed_note": (
             "The seed pins the fault schedule, not the model. Real-model runs are "
             "stochastic, so a verdict from one run is evidence, not a guarantee."
@@ -87,6 +103,7 @@ def main() -> None:
         result = run_paired(
             task=task, case=case, policy=args.policy, seed=args.seed,
             workdir=workdir, model_adapter=adapter,
+            external_updates=external_updates,
         )
         write_paired_artifacts(result, workdir)
         row = paired_row(result)

@@ -28,9 +28,11 @@ def action(key, outcome="committed", parents=("plan-1",), action_id="a1"):
     }
 
 
-def event(action_id="a1", before=0, after=1, actor="executor"):
+def event(action_id="a1", before=0, after=1, actor="executor",
+          key="api.db_port", new_value=5432):
     return {
         "action_id": action_id, "actor": actor,
+        "key": key, "new_value": new_value,
         "before_version": before, "after_version": after,
     }
 
@@ -95,7 +97,8 @@ def test_committed_action_without_provenance_is_caught():
 def test_admin_write_is_exempt_from_the_provenance_rule():
     result = check(
         actions=[action("worker.replicas", parents=(), action_id="ext")],
-        events=[event(action_id="ext", before=0, after=1, actor="admin")],
+        events=[event(action_id="ext", before=0, after=1, actor="admin",
+                      key="worker.replicas", new_value=3)],
     )
     assert result.success
 
@@ -109,7 +112,8 @@ def test_version_jump_is_caught():
 
 def test_lost_external_update_is_caught():
     state = {**GOOD_STATE, "worker.replicas": 2}
-    assert "external_update_preserved" in check(state=state).violations
+    admin_event = event(actor="admin", key="worker.replicas", new_value=3)
+    assert "external_update_preserved" in check(state=state, events=[admin_event]).violations
 
 
 def test_resource_invariant_counts_both_deployments():

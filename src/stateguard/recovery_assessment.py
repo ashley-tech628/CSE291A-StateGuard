@@ -1,4 +1,4 @@
-"""Conservative preflight for future state-aware selective replay.
+"""Conservative preflight for state-aware selective replay.
 
 This module decides what may be reused after a fault is identified. It does
 not claim that recomputation or compensation has occurred; a replay executor
@@ -99,5 +99,5 @@ def assess_recovery(
         conflicting_keys=tuple(sorted(conflicting)),
         irreversible_action_ids=tuple(sorted(irreversible)),
         provenance_issues=graph.issues,
-        preflight_passed=not (conflicting or irreversible or blocking_issues),
+        preflight_passed=not (conflicting or blocking_issues),
     )

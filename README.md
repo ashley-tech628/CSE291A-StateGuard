@@ -90,12 +90,12 @@ The Phase 1 comparison includes:
 
 ### Phase 2: Selective Recovery
 
-Phase 2 will implement and compare two selective recovery policies:
+Phase 2 compares two selective recovery policies:
 
 - Dependency-only replay, which invalidates downstream results using result dependencies
 - State-aware selective recovery, which also validates field versions, tool effects, external updates, and action-ledger state
 
-The planned recovery procedure is:
+The state-aware recovery procedure is:
 
 1. Receive the known faulty result ID from the experiment harness.
 2. Traverse downstream result and state dependencies.
@@ -122,18 +122,18 @@ Fault detection is intentionally separated from recovery in the core evaluation.
 | Controlled authorization checks | Implemented |
 | Incorrect, stale, timeout, and adversarial injection | Implemented |
 | No-recovery baseline | Implemented |
-| Full-restart baseline with external-event replay | Implemented for the fixed worker-scale event; general replay remains open |
+| Full-restart baseline with external-event replay | Implemented for ordered, version-checked simulated events |
 | Always-verify baseline | Implemented |
 | Trace, SQLite, CSV, and JSON export | Implemented |
 | Real LLM adapter and structured-output validation | Implemented; see [LLM setup](LLM_SETUP.md) |
 | Versioned workload and 11-case fault library | Implemented |
 | Paired clean/fault runner, checker, metrics, and figures | Implemented |
 | Durable agent-result provenance and typed impact graph | Implemented; see [Runtime and recovery notes](C_RUNTIME.md) |
-| State-aware recovery preflight | Implemented; selective replay execution remains open |
+| State-aware selective replay | Implemented for controlled SQLite actions; conflict and irreversible effects reported |
 | End-to-end lost-acknowledgment experiment | Planned |
 | Dependency topology expansion | Planned |
-| Dependency-only selective recovery | Phase 2 |
-| State-aware selective recovery | Phase 2 |
+| Dependency-only selective recovery | Planned comparison |
+| State-aware selective recovery | Initial controlled implementation |
 | Recovery ablations and conflict-density experiments | Phase 2 |
 
 ## Deterministic Pilot
@@ -176,7 +176,10 @@ The full evaluation will measure:
 | Overhead | Clean-run tracking latency, log size, version checks |
 | Conflict handling | Prevented lost updates, replanning, partial and blocked recoveries |
 
-Real LLM experiments will use fixed model configurations and multiple seeds. Results will report means, failure details, confidence intervals, and p50/p95 latency.
+The model adapter records the model identifier, prompt, response, latency, and
+reported token usage. The provider is not given a seed; repetition labels the
+fault schedule and run. Larger LLM experiments still need failure analysis,
+uncertainty estimates, and p50/p95 latency.
 
 ## Installation
 
@@ -206,6 +209,17 @@ Alternatively:
 
 The runner cleans only output directories that contain a StateGuard ownership marker. It refuses to clean a nonempty directory that it did not create.
 
+Run a paired clean/fault experiment with either recovery policy:
+
+    python scripts/run_paired_experiment.py --policy full_restart --output results/paired-restart --seed 7 --no-figures
+    python scripts/run_paired_experiment.py --policy selective_recovery --output results/paired-selective --seed 7 --no-figures
+
+Both commands save the initial faulty attempt and the recovery attempt. The
+selective policy operates on the original SQLite store; full restart creates
+a new store and replays recorded administrator events. See [Runtime and
+Recovery Work](C_RUNTIME.md) for event schedules, conflict behavior, and
+provenance inspection.
+
 ## Experiment Artifacts
 
 A complete run produces:
@@ -214,6 +228,9 @@ A complete run produces:
 - <code>report.json</code>: aggregate metrics grouped by policy
 - <code>runs/&lt;scenario&gt;/trace.json</code>: results, dependencies, verification decisions, actions, state events, final state, and checker output
 - <code>runs/&lt;scenario&gt;/*.sqlite3</code>: versioned state and action ledger for each attempt
+
+The paired runner additionally saves clean and faulty traces, a recovery trace
+when applicable, `paired.json`, `summary.csv`, and `report.json`.
 
 The central trace chain is:
 
@@ -231,6 +248,10 @@ The <code>fault_consumed</code> metric is true only when the planner actually us
 - <code>src/stateguard/state.py</code>: versioned SQLite state, events, and idempotency
 - <code>src/stateguard/workflow.py</code>: agents, planner, executor, faults, and checkers
 - <code>src/stateguard/experiment.py</code>: workloads, baselines, metrics, and artifact export
+- <code>src/stateguard/fault_runner.py</code>: paired clean/fault and recovery runs
+- <code>src/stateguard/provenance.py</code>: typed dependency and impact graph
+- <code>src/stateguard/recovery.py</code>: selective recomputation and conditional replay
+- <code>src/stateguard/recovery_assessment.py</code>: reuse and conflict preflight
 - <code>scripts/run_phase1.py</code>: experiment entry point
 - <code>tests/test_state.py</code>: state version and idempotency tests
 - <code>tests/test_experiment.py</code>: propagation, authorization, baseline, and matrix tests
@@ -240,18 +261,14 @@ The <code>fault_consumed</code> metric is true only when the planner actually us
 
 ### Near-term Phase 1 work
 
-- Add a real model adapter and structured-output validation
-- Record prompts, responses, model configuration, actual tokens, and retries
 - Add planner faults, executor faults, tool failures, and lost acknowledgments
 - Add chain, fan-out, diamond, independent-branch, and ignored-result workflows
-- Run multiple seeds and produce the Phase 1 analysis and figures
+- Expand LLM runs across tasks and report uncertainty and failure cases
 
 ### Phase 2 work
 
-- Build the typed dependency graph and impact analyzer
 - Implement dependency-only replay
-- Implement version validation and state-aware reuse
-- Add safe replay, conditional compensation, and blocked-recovery reporting
+- Add a controlled irreversible-effect case and compensation policy
 - Compare policies under unrelated updates, same-field conflicts, and shared-resource conflicts
 - Measure invalidation precision, retained valid work, stale reuse, and recovery overhead
 - Run ablations for provenance precision, version checks, and action-ID deduplication

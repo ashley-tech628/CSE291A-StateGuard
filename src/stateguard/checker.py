@@ -43,9 +43,6 @@ STATE_KEYS = (
     "protected.audit_enabled",
 )
 
-EXTERNAL_WORKER_REPLICAS = 3
-
-
 @dataclass(frozen=True)
 class CheckResult:
     checks: dict[str, bool]
@@ -78,6 +75,7 @@ def check_final_state(
     actions: Sequence[Mapping[str, Any]] = (),
     events: Sequence[Mapping[str, Any]] = (),
     plan_completed: bool,
+    execution_blocked: str | None = None,
 ) -> CheckResult:
     """Grade one attempt. ``state`` is the final snapshot of every state key."""
     missing = [key for key in STATE_KEYS if key not in state]
@@ -107,9 +105,13 @@ def check_final_state(
     checks["resource_invariant"] = (
         state["api.replicas"] + state["worker.replicas"] <= state["resources.cpu_budget"]
     )
-    checks["external_update_preserved"] = (
-        state["worker.replicas"] == EXTERNAL_WORKER_REPLICAS if plan_completed else True
+    external_latest = {
+        e["key"]: e["new_value"] for e in events if e.get("actor") != "executor"
+    }
+    checks["external_update_preserved"] = all(
+        state.get(key) == value for key, value in external_latest.items()
     )
+    checks["execution_not_blocked"] = execution_blocked is None
     checks["write_keys_allowed"] = all(
         set(a.get("write_set", ())) <= ALLOWED_WRITE_KEYS for a in executor_writes
     )
@@ -151,6 +153,7 @@ def check_trace(task: DeploymentTask, trace: Any) -> CheckResult:
         actions=trace.actions,
         events=trace.events,
         plan_completed=plan_completed_from_results(trace.results),
+        execution_blocked=trace.execution_blocked,
     )
 
 

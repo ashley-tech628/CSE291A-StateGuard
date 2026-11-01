@@ -28,6 +28,12 @@ ROW_FIELDS = (
     "trigger_on_calls",
     "policy",
     "seed",
+    "recovery_attempts",
+    "recovery_status",
+    "recomputed_stages",
+    "retained_results",
+    "recovery_tool_actions",
+    "recovery_latency_ms",
     "clean_success",
     "fault_success",
     "fault_exposed",
@@ -63,6 +69,17 @@ def paired_row(result: PairedResult) -> dict[str, Any]:
     """Flatten one paired experiment into a CSV row."""
     clean, fault, cmp = result.clean, result.fault, result.comparison
     changed = cmp["state_differences"]
+    decision = fault.recovery_decision or {}
+    recovery_status = decision.get(
+        "status", "complete" if fault.recovery_attempts and fault.check.success
+        else "blocked" if fault.recovery_attempts else "not_attempted",
+    )
+    recomputed = (
+        len(decision["recomputed_agents"]) if decision
+        else sum(1 for attempt in fault.recovery_attempts
+                 for item in attempt.results
+                 if item["agent_id"] in ("config", "dependency", "resource", "planner"))
+    )
     return {
         "pair_id": result.pair_id,
         "task_id": result.task.task_id,
@@ -75,6 +92,14 @@ def paired_row(result: PairedResult) -> dict[str, Any]:
         "trigger_on_calls": "|".join(str(n) for n in result.case.trigger_on_calls),
         "policy": result.policy,
         "seed": result.seed,
+        "recovery_attempts": len(fault.recovery_attempts),
+        "recovery_status": recovery_status,
+        "recomputed_stages": recomputed,
+        "retained_results": len(decision.get("reused_agents", ())),
+        "recovery_tool_actions": sum(len(a.actions) for a in fault.recovery_attempts),
+        "recovery_latency_ms": round(
+            sum(a.latency_ms for a in fault.recovery_attempts), 3,
+        ),
         "clean_success": clean.check.success,
         "fault_success": fault.check.success,
         "fault_exposed": cmp["fault_exposed_to_planner"],
@@ -89,20 +114,31 @@ def paired_row(result: PairedResult) -> dict[str, Any]:
         "changed_state_key_names": "|".join(sorted(changed)),
         "affected_stages": len(set(fault.trace.affected_stages)),
         "affected_stage_names": "|".join(sorted(set(fault.trace.affected_stages))),
-        "unauthorized_attempts": fault.check.unauthorized_attempts,
-        "unauthorized_commits": fault.check.unauthorized_commits,
+        "unauthorized_attempts": sum(
+            sum(a["outcome"] == "rejected" for a in attempt.actions)
+            for attempt in fault.all_attempts
+        ),
+        "unauthorized_commits": sum(
+            sum(a["outcome"] == "committed"
+                and any(key.startswith("protected.") for key in a["write_set"])
+                for a in attempt.actions)
+            for attempt in fault.all_attempts
+        ),
         "violations": "|".join(fault.check.violations),
         "committed_actions_clean": clean.check.committed_actions,
-        "committed_actions_fault": fault.check.committed_actions,
+        "committed_actions_fault": sum(
+            sum(a["outcome"] == "committed" for a in attempt.actions)
+            for attempt in fault.all_attempts
+        ),
         "inference_calls_clean": clean.trace.inference_calls,
-        "inference_calls_fault": fault.trace.inference_calls,
-        "model_calls_fault": fault.trace.real_inference_calls,
+        "inference_calls_fault": sum(a.inference_calls for a in fault.all_attempts),
+        "model_calls_fault": sum(a.real_inference_calls for a in fault.all_attempts),
         "simulated_tokens_clean": clean.trace.simulated_tokens,
-        "simulated_tokens_fault": fault.trace.simulated_tokens,
+        "simulated_tokens_fault": sum(a.simulated_tokens for a in fault.all_attempts),
         "actual_tokens_clean": clean.trace.actual_tokens,
-        "actual_tokens_fault": fault.trace.actual_tokens,
+        "actual_tokens_fault": sum(a.actual_tokens for a in fault.all_attempts),
         "latency_ms_clean": round(clean.trace.latency_ms, 3),
-        "latency_ms_fault": round(fault.trace.latency_ms, 3),
+        "latency_ms_fault": round(sum(a.latency_ms for a in fault.all_attempts), 3),
     }
 
 
@@ -127,6 +163,8 @@ def _group_stats(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "unauthorized_commits": sum(int(r["unauthorized_commits"]) for r in rows),
         "mean_affected_stages": _rate(sum(int(r["affected_stages"]) for r in rows), total),
         "total_inference_calls_fault": sum(int(r["inference_calls_fault"]) for r in rows),
+        "mean_recomputed_stages": _rate(sum(int(r.get("recomputed_stages", 0)) for r in rows), total),
+        "mean_retained_results": _rate(sum(int(r.get("retained_results", 0)) for r in rows), total),
         "total_actual_tokens_fault": sum(int(r["actual_tokens_fault"]) for r in rows),
         "mean_latency_ms_clean": _rate(sum(float(r["latency_ms_clean"]) for r in rows), total),
         "mean_latency_ms_fault": _rate(sum(float(r["latency_ms_fault"]) for r in rows), total),
@@ -195,20 +233,23 @@ def read_summary_csv(path: Path) -> list[dict[str, Any]]:
         "plan_writes_identical", "final_state_identical",
     }
     integers = {
-        "seed", "changed_state_keys", "affected_stages", "unauthorized_attempts",
+        "seed", "recovery_attempts", "recomputed_stages", "retained_results",
+        "recovery_tool_actions", "changed_state_keys", "affected_stages", "unauthorized_attempts",
         "unauthorized_commits", "committed_actions_clean", "committed_actions_fault",
         "inference_calls_clean", "inference_calls_fault", "model_calls_fault",
         "simulated_tokens_clean", "simulated_tokens_fault",
         "actual_tokens_clean", "actual_tokens_fault",
     }
-    floats = {"latency_ms_clean", "latency_ms_fault"}
+    floats = {"latency_ms_clean", "latency_ms_fault", "recovery_latency_ms"}
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     for row in rows:
         for key in booleans:
             row[key] = row[key] == "True"
         for key in integers:
-            row[key] = int(row[key])
+            if key in row:
+                row[key] = int(row[key])
         for key in floats:
-            row[key] = float(row[key])
+            if key in row:
+                row[key] = float(row[key])
     return rows

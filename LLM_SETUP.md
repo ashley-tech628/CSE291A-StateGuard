@@ -79,7 +79,7 @@ A successful JSON parse is not a valid stage result until fields/types/ranges ar
 - Workloads and prompts are small and structured. Config is largely extraction, Dependency uses fixed supported protocol v2, and Resource performs simple arithmetic. Broader knowledge materials and held-out tasks should be developed with B.
 - All three input results are exposed to Planner. A matching wrong write is observable propagation evidence for these controlled faults, not universal causal attribution or a precise affected-stage oracle. Ignored messages and task failures are separate observations.
 - Always verify uses deterministic checks on analysis results and rechecks the one retry. It does not verify every Planner decision or every tool operation.
-- Full restart receives an oracle fault trigger and retries clean from reset state, replaying the existing fixed administrator worker-replica update. General external-event replay, concurrent conflicts, lost ACK recovery and selective recovery remain C's work.
+- Full restart receives an oracle fault trigger and retries clean from reset state, replaying recorded simulated administrator events with value/version checks. The paired runner also supports controlled state-aware selective recovery. Real external services, lost-ACK injection, and conflict-density evaluation remain open.
 - The injected timeout is an intermediate-result timeout AFTER the model returned, not a real tool timeout or a commit-with-lost-ACK experiment. Those costs and outcomes should be labeled separately.
 - Tool permissions are enforced by Python; a rejected protected write demonstrates tool-layer enforcement, not proof of model resistance.
 

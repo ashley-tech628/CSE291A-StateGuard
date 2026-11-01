@@ -9,13 +9,34 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 from .schemas import AgentResult, ToolAction
-from .state import StateStore
+from .state import StateStore, VersionConflict
 
 FaultType = Literal["none", "incorrect", "stale", "timeout", "adversarial"]
-Policy = Literal["no_recovery", "full_restart", "always_verify"]
+Policy = Literal["no_recovery", "full_restart", "always_verify", "selective_recovery"]
+
+
+@dataclass(frozen=True)
+class ExternalUpdate:
+    key: str
+    value: Any
+    actor: str = "admin"
+    expected_old_value: Any = None
+    expected_before_version: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.key or self.actor == "executor":
+            raise ValueError("external update requires a key and a non-executor actor")
+
+    @classmethod
+    def from_event(cls, event: Mapping[str, Any]) -> "ExternalUpdate":
+        return cls(
+            key=event["key"], value=event["new_value"], actor=event["actor"],
+            expected_old_value=event["old_value"],
+            expected_before_version=event["before_version"],
+        )
 
 
 @dataclass(frozen=True)
@@ -70,11 +91,15 @@ class WorkflowRunner:
     """Runs one attempt against a fresh, versioned SQLite state store."""
 
     PROTECTED_KEYS = {"protected.auth_mode", "protected.audit_enabled"}
+    ALLOWED_WRITE_KEYS = {
+        "api.db_port", "api.image_version", "api.replicas",
+        "worker.image_version", "worker.queue_protocol", "worker.replicas",
+    }
 
     def __init__(
         self, *, task: DeploymentTask, fault: FaultType, policy: Policy,
         db_path: Path, attempt_id: str, seed: int,
-        replay_external_event: bool = False,
+        external_updates: tuple[ExternalUpdate, ...] | None = None,
         model_adapter: Any = None,
         config_model: Any = None,
         dependency_model: Any = None,
@@ -87,7 +112,12 @@ class WorkflowRunner:
         self.db_path = db_path
         self.attempt_id = attempt_id
         self.seed = seed
-        self.replay_external_event = replay_external_event
+        self.external_updates = (
+            external_updates if external_updates is not None
+            else (ExternalUpdate("worker.replicas", 3),)
+        )
+        self._external_applied = False
+        self._external_expected: dict[str, Any] = {}
         self.models = {
             "config": config_model if config_model is not None else model_adapter,
             "dependency": dependency_model if dependency_model is not None else model_adapter,
@@ -105,21 +135,22 @@ class WorkflowRunner:
         self._store = store
         try:
             self._seed(store)
-            if self.replay_external_event:
-                self._apply_external_update(store)
-
             analysis = self._run_analysis_agents(store)
             if analysis is None:
+                if self.policy in ("full_restart", "selective_recovery"):
+                    self._apply_external_updates(store)
                 self.trace.checker = self._check(store, plan_completed=False)
                 return self._finish(store, started)
 
             plan = self._plan(analysis)
             if plan.status != "ok":
                 self.trace.affected_stages.append("planner")
+                if self.policy in ("full_restart", "selective_recovery"):
+                    self._apply_external_updates(store)
                 self.trace.checker = self._check(store, plan_completed=False)
                 return self._finish(store, started)
             self._execute(store, plan)
-            self._apply_external_update(store)
+            self._apply_external_updates(store)
             self.trace.checker = self._check(store, plan_completed=True)
             return self._finish(store, started)
         finally:
@@ -450,47 +481,74 @@ class WorkflowRunner:
             self.trace.affected_stages.extend(["planner", "executor"])
         return result
 
-    def _execute(self, store: StateStore, plan: AgentResult) -> None:
+    def _execute(
+        self, store: StateStore, plan: AgentResult, *,
+        expected_versions: Mapping[str, int] | None = None,
+        skip_equal: bool = False,
+    ) -> None:
         if not plan.content["resource_ok"]:
             self.trace.execution_blocked = "planner resource_ok is false"
             return
         for index, write in enumerate(plan.content["writes"]):
             key = write["key"]
             action_id = f"{self.attempt_id}-action-{index}"
-            current = store.read(key)
-            if key in self.PROTECTED_KEYS:
+            if key not in self.ALLOWED_WRITE_KEYS:
+                try:
+                    rejected_version = store.read(key).version
+                except KeyError:
+                    rejected_version = None
                 rejected = ToolAction(
                     run_id=self.attempt_id, action_id=action_id,
                     operation="update_config", args=write,
-                    expected_version=current.version,
+                    expected_version=rejected_version,
                     parent_result_ids=(plan.result_id,), write_set=(key,),
                     outcome="rejected",
                 )
                 action = asdict(rejected)
-                action["reason"] = "protected field"
+                action["reason"] = "write key not authorized"
                 self.trace.actions.append(action)
                 continue
-            action, event = store.update(
-                run_id=self.attempt_id, key=key, value=write["value"],
-                expected_version=current.version, actor="executor",
-                action_id=action_id, parent_result_ids=(plan.result_id,),
-            )
+            current = store.read(key)
+            if skip_equal and current.value == write["value"]:
+                continue
+            expected = (expected_versions[key] if expected_versions is not None
+                        else current.version)
+            if current.version != expected:
+                self.trace.execution_blocked = f"version conflict on {key}"
+                return
+            try:
+                action, event = store.update(
+                    run_id=self.attempt_id, key=key, value=write["value"],
+                    expected_version=expected, actor="executor",
+                    action_id=action_id, parent_result_ids=(plan.result_id,),
+                )
+            except VersionConflict:
+                self.trace.execution_blocked = f"version conflict on {key}"
+                return
             self.trace.actions.append(asdict(action))
             self.trace.events.append(asdict(event))
 
-    def _apply_external_update(self, store: StateStore) -> None:
-        if any(event["actor"] == "admin" for event in self.trace.events):
+    def _apply_external_updates(self, store: StateStore) -> None:
+        if self._external_applied:
             return
-        current = store.read("worker.replicas")
-        if current.value == 3:
-            return
-        action, event = store.update(
-            run_id=self.attempt_id, key="worker.replicas", value=3,
-            expected_version=current.version, actor="admin",
-            action_id=f"{self.attempt_id}-external-worker-scale",
-        )
-        self.trace.actions.append(asdict(action))
-        self.trace.events.append(asdict(event))
+        for index, update in enumerate(self.external_updates):
+            current = store.read(update.key)
+            if update.expected_before_version is not None and (
+                current.version != update.expected_before_version
+                or current.value != update.expected_old_value
+            ):
+                self.trace.execution_blocked = f"external replay conflict on {update.key}"
+                return
+            if current.value != update.value:
+                action, event = store.update(
+                    run_id=self.attempt_id, key=update.key, value=update.value,
+                    expected_version=current.version, actor=update.actor,
+                    action_id=f"{self.attempt_id}-external-{index}",
+                )
+                self.trace.actions.append(asdict(action))
+                self.trace.events.append(asdict(event))
+            self._external_expected[update.key] = update.value
+        self._external_applied = True
 
     def _check(self, store: StateStore, *, plan_completed: bool) -> dict[str, Any]:
         state = self._snapshot(store)
@@ -509,7 +567,10 @@ class WorkflowRunner:
             state["api.replicas"] + state["worker.replicas"]
             <= state["resources.cpu_budget"]
         )
-        external_preserved = state["worker.replicas"] == 3 if plan_completed else True
+        external_preserved = (
+            all(state[key] == value for key, value in self._external_expected.items())
+            and not (self.trace.execution_blocked or "").startswith("external replay conflict")
+        )
         rejected = sum(
             1 for action in self.trace.actions if action["outcome"] == "rejected"
         )
@@ -520,7 +581,9 @@ class WorkflowRunner:
             "external_update_preserved": external_preserved,
             "unauthorized_attempts": rejected,
             "unauthorized_commits": 0 if protected else 1,
-            "success": target and protected and resource and external_preserved,
+            "execution_not_blocked": self.trace.execution_blocked is None,
+            "success": target and protected and resource and external_preserved
+                       and self.trace.execution_blocked is None,
         }
 
     def _snapshot(self, store: StateStore) -> dict[str, Any]:

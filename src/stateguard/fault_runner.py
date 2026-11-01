@@ -14,14 +14,14 @@ looked like on the way in.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from .checker import CheckResult, check_trace, plan_completed_from_results, state_differences
 from .faults import FaultCase, FaultSchedule, apply_mutation
 from .schemas import AgentResult
-from .workflow import AttemptTrace, Policy, WorkflowRunner
+from .workflow import AttemptTrace, ExternalUpdate, Policy, WorkflowRunner
 from .workloads import VersionedTask
 
 EVIDENCE_NOTE = (
@@ -113,6 +113,16 @@ class RunOutcome:
     check: CheckResult
     plan_writes: tuple[dict[str, Any], ...]
     verdict: str
+    recovery_attempts: tuple[AttemptTrace, ...] = ()
+    recovery_decision: dict[str, Any] | None = None
+
+    @property
+    def final_trace(self) -> AttemptTrace:
+        return self.recovery_attempts[-1] if self.recovery_attempts else self.trace
+
+    @property
+    def all_attempts(self) -> tuple[AttemptTrace, ...]:
+        return (self.trace, *self.recovery_attempts)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -123,6 +133,8 @@ class RunOutcome:
             "plan_writes": [dict(write) for write in self.plan_writes],
             "propagation_verdict": self.verdict,
             "trace": asdict(self.trace),
+            "recovery_attempts": [asdict(attempt) for attempt in self.recovery_attempts],
+            "recovery_decision": self.recovery_decision,
         }
 
 
@@ -136,6 +148,7 @@ def run_attempt(
     attempt_id: str,
     label: str,
     model_adapter: Any = None,
+    external_updates: tuple[ExternalUpdate, ...] | None = None,
 ) -> RunOutcome:
     runner = InjectedWorkflowRunner(
         schedule=schedule,
@@ -145,6 +158,7 @@ def run_attempt(
         attempt_id=attempt_id,
         seed=seed,
         model_adapter=model_adapter,
+        external_updates=external_updates,
     )
     trace = runner.run()
     return RunOutcome(
@@ -187,7 +201,8 @@ class PairedResult:
 
 def compare(clean: RunOutcome, fault: RunOutcome, case: FaultCase) -> dict[str, Any]:
     """Everything the paired design lets us say about this one case."""
-    differences = state_differences(clean.trace.final_state, fault.trace.final_state)
+    differences = state_differences(clean.final_trace.final_state,
+                                    fault.final_trace.final_state)
     evidence = fault.trace.fault_evidence[0] if fault.trace.fault_evidence else {}
     verdict = fault.verdict
     exposed = bool(evidence.get("exposed_to_planner"))
@@ -222,6 +237,7 @@ def run_paired(
     seed: int = 7,
     workdir: Path,
     model_adapter: Any = None,
+    external_updates: tuple[ExternalUpdate, ...] | None = None,
 ) -> PairedResult:
     """Run the same workload clean and faulty, and report what differed."""
     workdir.mkdir(parents=True, exist_ok=True)
@@ -235,6 +251,7 @@ def run_paired(
         attempt_id=f"{base}-clean",
         label="clean",
         model_adapter=model_adapter,
+        external_updates=external_updates,
     )
     fault = run_attempt(
         task=task,
@@ -245,7 +262,37 @@ def run_paired(
         attempt_id=f"{base}-fault",
         label="fault",
         model_adapter=model_adapter,
+        external_updates=external_updates,
     )
+    if policy == "full_restart":
+        external_log = tuple(
+            ExternalUpdate.from_event(event) for event in fault.trace.events
+            if event["actor"] != "executor"
+        )
+        restart = run_attempt(
+            task=task, schedule=FaultSchedule.clean(seed), policy=policy,
+            seed=seed, db_path=workdir / "fault-restart.sqlite3",
+            attempt_id=f"{base}-fault-restart", label="fault-restart",
+            model_adapter=model_adapter, external_updates=external_log,
+        )
+        fault = replace(fault, check=restart.check,
+                        recovery_attempts=(restart.trace,))
+    elif policy == "selective_recovery":
+        from .recovery import recover_selectively
+
+        if len(fault.applied_cases) != 1:
+            raise ValueError("selective recovery requires exactly one known faulty result")
+        recovery = recover_selectively(
+            task=task.task, db_path=workdir / "fault.sqlite3",
+            initial=fault.trace,
+            faulty_result_id=fault.applied_cases[0]["result_id"],
+            model_adapter=model_adapter,
+        )
+        fault = replace(
+            fault, check=recovery.check,
+            recovery_attempts=(recovery.trace,),
+            recovery_decision=recovery.as_dict(),
+        )
     return PairedResult(
         task=task,
         case=case,
@@ -258,11 +305,16 @@ def run_paired(
 
 
 def write_paired_artifacts(result: PairedResult, workdir: Path) -> None:
-    """Two complete traces plus the comparison, as the deliverable requires."""
+    """Clean, faulty, and any recovery attempts plus their comparison."""
     workdir.mkdir(parents=True, exist_ok=True)
     for outcome in (result.clean, result.fault):
         (workdir / f"{outcome.label}-trace.json").write_text(
             json.dumps(outcome.as_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    for index, attempt in enumerate(result.fault.recovery_attempts, start=1):
+        name = "fault-restart" if result.policy == "full_restart" else f"fault-recovery-{index}"
+        (workdir / f"{name}-trace.json").write_text(
+            json.dumps(asdict(attempt), indent=2, ensure_ascii=False), encoding="utf-8"
         )
     (workdir / "paired.json").write_text(
         json.dumps(result.as_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
