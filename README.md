@@ -214,6 +214,19 @@ Run a paired clean/fault experiment with either recovery policy:
     python scripts/run_paired_experiment.py --policy full_restart --output results/paired-restart --seed 7 --no-figures
     python scripts/run_paired_experiment.py --policy selective_recovery --output results/paired-selective --seed 7 --no-figures
 
+For a real-model pilot on TritonAI, set `OPENAI_BASE_URL` to
+`https://tritonai-api.ucsd.edu/v1` and provide `OPENAI_API_KEY` in the shell.
+Start with one case and pace calls to avoid exhausting the key's request window:
+
+    python scripts/run_paired_experiment.py --llm --model api-glm-5.3-flash --policy selective_recovery --cases incorrect-db-port-3306 --seed 7 --max-attempts 3 --request-interval 5 --output results/llm-selective-pilot --no-figures
+
+The adapter records per-request waits and bounded retries. It honors a provider
+`Retry-After` value on HTTP 429; otherwise it uses bounded exponential backoff.
+If a 429 persists after retries, the paired runner stops and exits with code 2.
+Check `run_status.json`: only `complete: true` means the requested case set
+finished. An incomplete report and its failed traces remain available for
+diagnosis, but its success rates must not be used for policy comparison.
+
 Both commands save the initial faulty attempt and the recovery attempt. The
 selective policy operates on the original SQLite store; full restart creates
 a new store and replays recorded administrator events. See [Runtime and

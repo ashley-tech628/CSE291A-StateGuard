@@ -156,6 +156,67 @@ def test_adapter_redacts_exception_text():
     assert "private-key-should-not-leak" not in json.dumps(out)
 
 
+def test_adapter_obeys_retry_after_for_429(monkeypatch):
+    delays = []
+    monkeypatch.setattr("stateguard.model_adapter.sleep", delays.append)
+    error = RuntimeError("private-key-should-not-leak")
+    error.status_code = 429
+    error.response = SimpleNamespace(headers={"retry-after": "2"})
+    client = MockClient([error, response('{"ok": true}')])
+    out = ModelAdapter(client=client, max_attempts=2).generate_json("test", {})
+    assert out["status"] == "ok"
+    assert out["retry_count"] == 1
+    assert out["attempts"][0]["http_status"] == 429
+    assert out["attempts"][0]["backoff_seconds"] == 2.0
+    assert delays == [2.0]
+    assert "private-key-should-not-leak" not in json.dumps(out)
+
+
+def test_adapter_spaces_requests_across_stages(monkeypatch):
+    now = [100.0]
+    delays = []
+    monkeypatch.setattr("stateguard.model_adapter.monotonic", lambda: now[0])
+    def advance(seconds):
+        delays.append(seconds)
+        now[0] += seconds
+    monkeypatch.setattr("stateguard.model_adapter.sleep", advance)
+    client = MockClient([response('{"ok": true}'), response('{"ok": true}')])
+    adapter = ModelAdapter(client=client, request_interval_seconds=3)
+    adapter.generate_json("first stage", {})
+    adapter.generate_json("second stage", {})
+    assert delays == [3.0]
+
+
+def test_adapter_does_not_retry_auth_error(monkeypatch):
+    monkeypatch.setattr("stateguard.model_adapter.sleep", lambda _: pytest.fail("unexpected retry"))
+    error = RuntimeError("secret should not leak")
+    error.status_code = 401
+    out = ModelAdapter(client=MockClient([error]), max_attempts=3).generate_json("test", {})
+    assert out["status"] == "error"
+    assert out["retry_count"] == 0
+
+
+def test_paired_runner_stops_only_for_unrecovered_429():
+    import importlib.util
+    script = Path(__file__).parents[1] / "scripts" / "run_paired_experiment.py"
+    spec = importlib.util.spec_from_file_location("paired_cli_rate_limit", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    failed = SimpleNamespace(model_calls=[{
+        "status": "error", "attempts": [{"http_status": 429}],
+    }])
+    recovered = SimpleNamespace(model_calls=[{
+        "status": "ok", "attempts": [{"http_status": 429}, {"status": "ok"}],
+    }])
+    empty = SimpleNamespace(model_calls=[])
+    def pair(clean):
+        return SimpleNamespace(clean=SimpleNamespace(trace=clean),
+                               fault=SimpleNamespace(trace=empty,
+                                                     recovery_attempts=()))
+    assert module.unrecovered_rate_limit(pair(failed))
+    assert not module.unrecovered_rate_limit(pair(recovered))
+
+
 def test_plan_schema_rejects_boolean_port():
     assert not WorkflowRunner._valid_plan({"resource_ok": True, "writes": [
         {"key": "api.db_port", "value": True}]})
