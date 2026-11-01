@@ -97,10 +97,12 @@ class WorkflowRunner:
         self.backend = DeterministicAgentBackend()
         self.trace = AttemptTrace(attempt_id=attempt_id)
         self._faulty_result_ids: set[str] = set()
+        self._store: StateStore | None = None
 
     def run(self) -> AttemptTrace:
         started = perf_counter()
         store = StateStore(self.db_path)
+        self._store = store
         try:
             self._seed(store)
             if self.replay_external_event:
@@ -121,6 +123,7 @@ class WorkflowRunner:
             self.trace.checker = self._check(store, plan_completed=True)
             return self._finish(store, started)
         finally:
+            self._store = None
             store.close()
 
     def _seed(self, store: StateStore) -> None:
@@ -530,6 +533,9 @@ class WorkflowRunner:
         return {key: store.read(key).value for key in keys}
 
     def _record_result(self, result: AgentResult) -> AgentResult:
+        if self._store is None:
+            raise RuntimeError("agent results can only be recorded during a run")
+        self._store.record_result(result)
         self.trace.results.append(asdict(result))
         return result
 

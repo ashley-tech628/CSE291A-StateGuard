@@ -117,15 +117,19 @@ Fault detection is intentionally separated from recovery in the core evaluation.
 | SQLite field-level versions | Implemented |
 | Atomic state and event transactions | Implemented |
 | Action ledger and idempotent retries | Implemented |
-| Config, Dependency, and Resource agents | Deterministic implementation |
-| Planner and Executor | Deterministic implementation |
+| Config, Dependency, and Resource agents | Deterministic and optional TritonAI-backed implementations |
+| Planner and Executor | Deterministic and optional TritonAI-backed planning; controlled executor |
 | Controlled authorization checks | Implemented |
 | Incorrect, stale, timeout, and adversarial injection | Implemented |
 | No-recovery baseline | Implemented |
-| Full-restart baseline with external-event replay | Implemented |
+| Full-restart baseline with external-event replay | Implemented for the fixed worker-scale event; general replay remains open |
 | Always-verify baseline | Implemented |
 | Trace, SQLite, CSV, and JSON export | Implemented |
-| Real LLM adapter and structured-output validation | Planned |
+| Real LLM adapter and structured-output validation | Implemented; see [LLM setup](LLM_SETUP.md) |
+| Versioned workload and 11-case fault library | Implemented |
+| Paired clean/fault runner, checker, metrics, and figures | Implemented |
+| Durable agent-result provenance and typed impact graph | Implemented; see [Runtime and recovery notes](C_RUNTIME.md) |
+| State-aware recovery preflight | Implemented; selective replay execution remains open |
 | End-to-end lost-acknowledgment experiment | Planned |
 | Dependency topology expansion | Planned |
 | Dependency-only selective recovery | Phase 2 |
@@ -153,7 +157,8 @@ For seed 7:
 - Full restart produced a correct final state in all 32 fault scenarios and preserved the administrator update.
 - Always verify corrected all 32 faults before planner consumption.
 - Unauthorized committed actions were zero under every policy.
-- The repository contains 17 passing automated tests.
+- The original pilot had 17 tests. The current suite also covers model integration,
+  paired evaluation, and provenance; run `pytest -q` for the current count.
 
 The deterministic backend uses fixed structured outputs. The simulated token values are cost units for testing metrics and are not measured LLM tokens or evidence of model performance.
 
