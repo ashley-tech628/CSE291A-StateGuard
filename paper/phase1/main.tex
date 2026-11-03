@@ -15,8 +15,8 @@
 \renewcommand\paragraph{\@startsection{paragraph}{4}{0pt}{5pt}{-0.7em}{\normalfont\normalsize\bfseries}}
 \makeatother
 \renewenvironment{abstract}{\noindent\textbf{Abstract.}\ }{\par\vspace{3pt}}
-\newcommand{\ThirdAuthor}{} % Add the third member before submission.
-\newcommand{\ThirdEmail}{}
+\newcommand{\ThirdAuthor}{Haodi Yuan}
+\newcommand{\ThirdEmail}{\texttt{hay101@ucsd.edu}}
 \newcommand{\sg}{\textsc{StateGuard}}
 \title{\vspace{-1.7em}\sg: Failure Propagation and State-Consistent Recovery\\in Tool-Using Multi-Agent Workflows\vspace{-0.6em}}
 \author{Xinying Liu\quad Jingwen Zhang\quad\ThirdAuthor\\
@@ -34,6 +34,8 @@
 \section{Research question and workflow}
 An incorrect port can propagate from analysis into a plan and committed configuration. Replanning leaves the write behind; snapshot rollback may erase a later administrator update. Our questions are: \textbf{RQ1}, which message and state dependencies carry failures; \textbf{RQ2}, which work remains reusable after legitimate updates; and \textbf{RQ3}, when does selective recovery save more than its bookkeeping costs?
 
+A representative trace begins with an obsolete guide claiming that the API can use database port 3306. The Dependency result passes this claim to the Planner, which writes the resulting API configuration. Meanwhile, a worker scales independently and an administrator raises API replicas. Correct recovery must repair the port while preserving both valid changes, provided the resulting CPU budget still holds. This trace makes consumption, committed effects, and intervening state changes separately observable.
+
 Config, Dependency, and Resource Agents analyze configuration, versioned knowledge, and capacity. A Planner consumes structured results; a controlled Executor modifies API, worker, and database state. Checkers enforce compatibility, resource budgets, deployment goals, and protected authentication/audit fields. Python, Pydantic, SQLite, a CLI runner, and pytest implement the system. A TritonAI adapter logs prompts, responses, tokens, timing, and retries; deterministic agents isolate runtime semantics.
 
 \section{State-consistent recovery design}
@@ -46,6 +48,8 @@ r\notin I(f)\ \land\ \forall(k,v)\in R_r:\ v_k^{\mathrm{current}}=v.
 Missing provenance, tool effects, and resource constraints require further checks. Invalid analyses and the Planner are recomputed; eligible independent results are retained.
 
 Writes carry an expected version and action ID. A SQLite transaction checks the version and commits state, ledger, and events together; identical retries return the recorded outcome after a simulated lost acknowledgement. Selective replay writes changed fields and blocks conflicting updates. Full restart rebuilds state and replays recorded external events in order with value/version preconditions. Irreversible effects remain explicit. Correct recovery requires task goals, invariants, preserved legitimate updates, and no new unauthorized effects. Local transactions do not guarantee rollback or exactly-once effects at remote services.
+
+For a write to field $k$, the tool admits the action only when its supplied expected version equals the current $v_k$. An administrator write to that field invalidates the stale precondition; a write to an unrelated field need not. The final checker re-evaluates global constraints, so independent work is not automatically safe when it consumes a shared CPU budget. We classify a recovery as blocked or partial when a conflict or irreversible effect prevents the full objective.
 
 The integrated suite passes \textbf{156 tests}, covering independent-result reuse, administrator updates, same-field conflicts, replay preconditions, and lost-ACK deduplication. Selective recovery is implemented and tested; its real-model comparison remains Phase 2 work.
 
@@ -64,6 +68,8 @@ The integrated suite passes \textbf{156 tests}, covering independent-result reus
 \textbf{Workload.} One deployment task and topology exercise 11 cases: three wrong-port variants, two stale-protocol variants, two analysis timeouts, two malicious protected-field instructions, and two intended ignored controls. Thus $11\times3\times3=99$ pairs span the three policies. Earlier eight-scenario smoke and paired pilots are separate because retry settings differ. Lost ACK and external-update recovery are tested deterministically, not exercised by this real-model matrix.
 
 \section{Measured results and failure analysis}
+We record whether the injected result was exposed to a downstream agent, whether its content was consumed, and whether a bad action committed. An ignored instruction therefore contributes to the verdict distribution but cannot establish that a recovery algorithm repaired a propagated fault. Clean/fault pairs share a workload and injection schedule; model sampling remains uncontrolled across separate calls.
+
 Of 99 recorded pairs, 96 are valid: two FR pairs (seed 7) have HTTP 422 errors; one NR pair (seed 19) fails its clean control without an API error. Excluding these combinations from \emph{every} policy leaves $9+11+10=30$ matched comparisons. Failed traces remain available; results are conditional on this validity gate.
 
 \begin{table}[h]
@@ -83,21 +89,35 @@ Mean recomputed stages & 0 & 4 & 0\\\bottomrule
 
 FR completes all matched tasks at $2.05\times$ NR's tokens and $2.01\times$ its latency. AV reaches 80\% completion at $1.14\times$ the tokens and $1.24\times$ the latency. Figure~\ref{fig:propagation-cost} shows distributions; latency includes pacing, not just model compute.
 
-NR has 4 consumed, 9 ignored, 11 refused, and 6 blocked injections. All six adversarial runs succeed under every policy because instructions are ignored, not recovered from. Zero unauthorized commits is therefore limited evidence. Stochastic calls can change propagation verdicts across policies.
+NR has 4 consumed, 9 ignored, 11 refused, and 6 blocked injections. All six adversarial runs succeed because instructions are ignored; zero unauthorized commits does not show recovery from an accepted attack. Model calls can change propagation verdicts.
 
 The persistent-port case supplies the clearest propagation path: NR consumes the error with 0/3 successes, FR succeeds 3/3, and AV remains blocked 0/3. AV also fails all three compatibility-flag controls, which are refused rather than ignored. Among accidental cases, completion is 3/24, 24/24, and 18/24 for NR, FR, and AV. Aggregate scores therefore conceal systematic case-level failures.
 
 \section{Remaining proposal and evaluation plan}
-This pilot covers one task/topology and constrained tools. Detection, tracking overhead, and selective-recovery performance remain unevaluated. Phase 2 will compare dependency-only and state-aware replay against FR and AV under identical fault identities, event schedules, and budgets. We target 24--36 tasks, adjusted after a cost pilot, with chain, fan-out, and diamond dependencies; unchanged state, unrelated updates, same-field conflicts, and shared-resource contention. Task/constraint combinations will separate development and evaluation workloads.
+This pilot covers one task/topology and constrained tools. Detection, tracking overhead, and selective-recovery performance remain unevaluated. Phase 2 will compare dependency-only and state-aware replay against FR and AV under identical fault identities, event schedules, and budgets. We target 24--36 tasks, adjusted after a cost pilot, with chain, fan-out, and diamond dependencies; unchanged state, unrelated updates, same-field conflicts, and shared-resource contention. We will separate development and evaluation workloads.
 
-Ablations remove field-level reads, version checks, and action deduplication. Checkers and small-case replay oracles will assess invalidation precision/recall, stale reuse, retained valid work, propagation footprints, preserved updates, and partial/blocked outcomes. Cost analysis will include calls/tokens, recomputed stages, recovery latency, and tracking time/storage/memory. Repeated trials will estimate distributions and uncertainty across tasks. Docker Compose service validation and a second model are optional extensions after core comparisons stabilize.
+Ablations remove field-level reads, version checks, and action deduplication. Checkers and replay oracles will assess invalidation precision/recall, stale reuse, retained work, preserved updates, and blocked outcomes. Cost analysis includes tokens, recomputation, latency, and tracking overhead.
 
-\paragraph{Appendix: milestones.}
+\clearpage
+\section*{Appendix: Project milestones and reproducibility}
+\textbf{Milestone schedule.}
 \textbf{Nov. 3--4:} freeze Phase 1 artifacts.
 \textbf{Nov. 5--15:} expand topologies/events and validate oracles.
 \textbf{Nov. 16--25:} run selective-recovery comparisons and ablations.
 \textbf{Nov. 26--Dec. 4:} analyze overhead and failure boundaries.
 \textbf{Dec. 5--10:} reproduce results and finalize the report.
+
+\paragraph{Reproduction and inspection.}
+The repository stores the workload fingerprint, fault schedule, source revision, model ID, retry and pacing settings, per-pair validity, final checker verdict, and prompt/response trace. Rebuild the matched CSV and both paper figures using the analysis scripts. The case-success heatmap reports per-case successes and denominators, exposing systematic failures masked by aggregate rates. The 156-test suite checks runtime invariants separately from the real-model pilot.
+
+\paragraph{Boundary of current evidence.}
+The recorded real-model matrix compares NR, FR, and AV. It does not measure selective replay, a dependency-only comparator, model-to-model robustness, precision of automatic detection, or recovery of effects outside controlled tools. A second model, additional topologies, and isolated instrumentation measurements remain future work; a single task cannot support population-level significance claims.
+
+\paragraph{Planned evaluation matrix.}
+The next benchmark varies dependency structure and the timing and target of external writes while holding the fault identity constant across policies. Chain cases measure how far an invalid result flows; fan-out cases test retention of independent branches; diamond cases test whether reconverging branches reuse stale shared assumptions. For each topology, an administrator may write no field, an unrelated field, or the field the recovery would modify. We will compare the final state with an executable oracle that replays legal external events. Equal final goals are insufficient if an intervening legitimate update was lost.
+
+\paragraph{Recovery decision audit.}
+A representative record should include the faulty result ID, transitive invalidation set, candidate results accepted or rejected for reuse, current field versions, conflicting tool actions, replayed external events, final checker verdict, and residual effects. This audit separates the work saved by selective replay from work merely skipped because an injected message was never consumed. We will report blocked recoveries alongside completed ones and include failed clean controls in the experiment accounting.
 
 \paragraph{Related work and artifacts.}
 AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} motivate joint utility and security evaluation. Our \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository} supplies code, manifests, paired traces, and case/cost figures for known-fault recovery.

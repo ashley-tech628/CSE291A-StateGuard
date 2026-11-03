@@ -1,7 +1,7 @@
 # StateGuard Phase 1 report
 
-`StateGuard_Phase1_Report.pdf` is the compiled two-page submission. It includes
-the milestone appendix and references within the two-page total. Body text is
+`StateGuard_Phase1_Report.pdf` is the compiled submission: two pages of main text and a third
+page for the milestone/reproducibility appendix and references. Body text is
 10pt on 12pt leading, in two columns with a 7in by 9in text block and page numbers.
 
 The report describes the implemented workflow and runtime, the matched AWS /
@@ -10,9 +10,7 @@ It does not present selective-recovery unit tests as real-model evaluation.
 
 ## Authors
 
-Xinying Liu and Jingwen Zhang are filled in as provided. Before submission, add
-the third member to `ThirdAuthor` and `ThirdEmail` in `main.tex`, then recompile
-and verify the page count. No individual contribution statement is included.
+Xinying Liu, Jingwen Zhang, and Haodi Yuan are filled in as provided. No individual contribution statement is included.
 
 ## Compile
 
@@ -36,7 +34,7 @@ deployment task, not significance claims across deployment workloads.
 ## Verification
 
 - Integrated code: 156 tests pass.
-- Final PDF: two letter-sized pages; visual rendering checked on both pages.
+- Final PDF: three letter-sized pages (two main-text pages plus appendix/references); all pages visually checked.
 - No overfull text boxes in the final TeX log.
 - Citation metadata checked against AgentDojo's arXiv page, Microsoft's TAMAS
   repository, and the A2ASecBench project page.

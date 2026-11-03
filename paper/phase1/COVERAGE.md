@@ -22,7 +22,7 @@
 | Milestones through December 10 | Appendix paragraph | Planned |
 | Primary benchmark references and reproducibility artifacts | Final paragraph/references | Sources and repository link |
 
-This two-page document combines the whole-project proposal with Phase 1 evidence.
+The two-page main text combines the whole-project proposal with Phase 1 evidence; page three contains the appendix and references.
 It does not claim that planned experiments, selective-recovery LLM comparisons,
 or arbitrary remote-side-effect rollback have already been completed.
 The full case-by-case success heatmap remains in the repository; the report
