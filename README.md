@@ -216,6 +216,9 @@ Run a paired clean/fault experiment with either recovery policy:
 
 For a real-model pilot on TritonAI, set `OPENAI_BASE_URL` to
 `https://tritonai-api.ucsd.edu/v1` and provide `OPENAI_API_KEY` in the shell.
+The [Phase 1 AWS/TritonAI experiment](PHASE1_C_RESULTS.md) reports three
+matched baselines across three seeds, including invalid-pair exclusions,
+actual token and latency measurements, figures, and complete paired traces.
 Start with one case and pace calls to avoid exhausting the key's request window:
 
     python scripts/run_paired_experiment.py --llm --model api-glm-5.3-flash --policy selective_recovery --cases incorrect-db-port-3306 --seed 7 --max-attempts 3 --request-interval 5 --output results/llm-selective-pilot --no-figures
