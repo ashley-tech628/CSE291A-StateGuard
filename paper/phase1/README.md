@@ -1,6 +1,6 @@
 # StateGuard Phase 1 report
 
-`StateGuard_Phase1_Report.pdf` is the compiled submission: two pages of main text and a third
+`StateGuard_Phase1_Report_Expanded.pdf` is the current compiled submission: two pages of main text and a third
 page for the milestone/reproducibility appendix and references. Body text is
 10pt on 12pt leading, in two columns with a 7in by 9in text block and page numbers.
 
@@ -47,3 +47,5 @@ The report includes the three-panel propagation, token-cost, and latency figure
 as a full-width vector graphic, reformatted for readable two-column printing.
 The outcome table preserves completion, unauthorized commits, calls, and
 recomputation counts. See `COVERAGE.md` for proposal-to-report coverage.
+
+The earlier `StateGuard_Phase1_Report.pdf` is superseded by the expanded version.
