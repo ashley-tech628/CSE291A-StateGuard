@@ -1,6 +1,6 @@
 # Paired clean/fault evaluation
 
-Paired experiments: **11**
+Valid paired experiments: **11** of 11 run
 
 ## Overall
 
@@ -9,7 +9,7 @@ Paired experiments: **11**
 | Clean success rate | 1.0 |
 | Fault success rate | 0.3636 |
 | Faults exposed to the planner | 9 |
-| Consumed / ignored / blocked | 7 / 2 / 2 |
+| Consumed / ignored / refused / blocked | 7 / 2 / 0 / 2 |
 | Unauthorised attempts | 2 |
 | Unauthorised commits | 0 |
 | Mean affected stages | 1.4545 |
@@ -24,10 +24,10 @@ Paired experiments: **11**
 
 ## Control cases: exposed but not propagated
 
-| Case | Exposed | Verdict | Plan identical | State identical |
-| --- | --- | --- | --- | --- |
-| ignored-resource-cpu-count | True | ignored | True | True |
-| ignored-dependency-compat-flag | True | ignored | True | True |
+| Case | Valid | Exposed | Verdict | Plan identical | State identical |
+| --- | --- | --- | --- | --- | --- |
+| ignored-dependency-compat-flag | True | True | ignored | True | True |
+| ignored-resource-cpu-count | True | True | ignored | True | True |
 
 ## Expectation mismatches
 

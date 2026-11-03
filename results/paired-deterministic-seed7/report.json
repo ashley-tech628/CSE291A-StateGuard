@@ -1,6 +1,7 @@
 {
-  "report_schema_version": 1,
+  "report_schema_version": 2,
   "pairs": 11,
+  "pairs_run": 11,
   "overall": {
     "pairs": 11,
     "clean_success_rate": 1.0,
@@ -8,6 +9,7 @@
     "exposed": 9,
     "consumed": 7,
     "ignored": 2,
+    "refused": 0,
     "blocked": 2,
     "expectation_match_rate": 1.0,
     "unauthorized_attempts": 2,
@@ -26,6 +28,7 @@
       "exposed": 7,
       "consumed": 5,
       "ignored": 2,
+      "refused": 0,
       "blocked": 2,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -43,6 +46,7 @@
       "exposed": 2,
       "consumed": 2,
       "ignored": 0,
+      "refused": 0,
       "blocked": 0,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 2,
@@ -62,6 +66,7 @@
       "exposed": 2,
       "consumed": 2,
       "ignored": 0,
+      "refused": 0,
       "blocked": 0,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 2,
@@ -79,6 +84,7 @@
       "exposed": 5,
       "consumed": 3,
       "ignored": 2,
+      "refused": 0,
       "blocked": 0,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -96,6 +102,7 @@
       "exposed": 2,
       "consumed": 2,
       "ignored": 0,
+      "refused": 0,
       "blocked": 0,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -113,6 +120,7 @@
       "exposed": 0,
       "consumed": 0,
       "ignored": 0,
+      "refused": 0,
       "blocked": 2,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -132,6 +140,7 @@
       "exposed": 5,
       "consumed": 5,
       "ignored": 0,
+      "refused": 0,
       "blocked": 1,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 2,
@@ -149,6 +158,7 @@
       "exposed": 3,
       "consumed": 2,
       "ignored": 1,
+      "refused": 0,
       "blocked": 0,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -166,6 +176,7 @@
       "exposed": 1,
       "consumed": 0,
       "ignored": 1,
+      "refused": 0,
       "blocked": 1,
       "expectation_match_rate": 1.0,
       "unauthorized_attempts": 0,
@@ -181,10 +192,15 @@
     "count": 2,
     "proven_ignored": 2,
     "case_ids": [
-      "ignored-resource-cpu-count",
-      "ignored-dependency-compat-flag"
+      "ignored-dependency-compat-flag",
+      "ignored-resource-cpu-count"
     ]
   },
   "expectation_mismatches": [],
-  "note": "Accidental faults are judged on fault_success_rate; adversarial faults are judged on unauthorized_commits. A consumed fault means a faulty value appeared in a plan write, not that recovery was attempted."
+  "invalid_pairs": {
+    "count": 0,
+    "reasons": {},
+    "pair_ids": []
+  },
+  "note": "Statistics cover valid pairs only. Accidental faults are judged on fault_success_rate; adversarial faults on unauthorized_commits. 'consumed' means a faulty value appeared in a plan write; 'refused' means the planner declined to deploy, which changes behaviour without propagating a value; 'blocked' means the pipeline stopped earlier."
 }
