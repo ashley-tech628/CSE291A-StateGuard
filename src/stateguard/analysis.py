@@ -15,8 +15,13 @@ from .metrics import build_report, read_summary_csv
 
 CLEAN_COLOR = "#4C78A8"
 FAULT_COLOR = "#E45756"
-VERDICT_COLORS = {"consumed": "#E45756", "ignored": "#54A24B", "blocked": "#9D9D9D"}
-VERDICTS = ("consumed", "ignored", "blocked")
+VERDICT_COLORS = {
+    "consumed": "#E45756",
+    "ignored": "#54A24B",
+    "refused": "#F58518",
+    "blocked": "#9D9D9D",
+}
+VERDICTS = ("consumed", "ignored", "refused", "blocked")
 
 
 def _pyplot():
@@ -149,9 +154,15 @@ def plot_cost(rows: Sequence[dict[str, Any]], outdir: Path) -> Path:
                    outdir / "cost.png")
 
 
+def valid_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pairs that can be counted; see metrics.build_report for the rule."""
+    return [row for row in rows if row["pair_valid"]]
+
+
 def build_figures(rows: Sequence[dict[str, Any]], outdir: Path) -> list[Path]:
+    rows = valid_rows(rows)
     if not rows:
-        raise ValueError("no rows to plot")
+        raise ValueError("no valid pairs to plot")
     return [
         plot_success_rate(rows, outdir),
         plot_propagation(rows, outdir),
@@ -163,11 +174,20 @@ def build_figures(rows: Sequence[dict[str, Any]], outdir: Path) -> list[Path]:
 def render_markdown(report: dict[str, Any], rows: Sequence[dict[str, Any]]) -> str:
     """A short report the group can paste into the write-up."""
     overall = report["overall"]
+    invalid = report["invalid_pairs"]
     lines = [
         "# Paired clean/fault evaluation",
         "",
-        f"Paired experiments: **{report['pairs']}**",
+        f"Valid paired experiments: **{report['pairs']}** of {report['pairs_run']} run",
         "",
+    ]
+    if invalid["count"]:
+        lines += [
+            f"> **{invalid['count']} pair(s) excluded** and not counted below: "
+            + ", ".join(f"{name} x{n}" for name, n in sorted(invalid["reasons"].items())),
+            "",
+        ]
+    lines += [
         "## Overall",
         "",
         "| Metric | Value |",
@@ -175,7 +195,8 @@ def render_markdown(report: dict[str, Any], rows: Sequence[dict[str, Any]]) -> s
         f"| Clean success rate | {overall['clean_success_rate']} |",
         f"| Fault success rate | {overall['fault_success_rate']} |",
         f"| Faults exposed to the planner | {overall['exposed']} |",
-        f"| Consumed / ignored / blocked | {overall['consumed']} / {overall['ignored']} / {overall['blocked']} |",
+        f"| Consumed / ignored / refused / blocked | {overall['consumed']} / "
+        f"{overall['ignored']} / {overall['refused']} / {overall['blocked']} |",
         f"| Unauthorised attempts | {overall['unauthorized_attempts']} |",
         f"| Unauthorised commits | {overall['unauthorized_commits']} |",
         f"| Mean affected stages | {overall['mean_affected_stages']} |",
@@ -195,15 +216,16 @@ def render_markdown(report: dict[str, Any], rows: Sequence[dict[str, Any]]) -> s
         "",
         "## Control cases: exposed but not propagated",
         "",
-        "| Case | Exposed | Verdict | Plan identical | State identical |",
-        "| --- | --- | --- | --- | --- |",
+        "| Case | Valid | Exposed | Verdict | Plan identical | State identical |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
         if row["expected_propagation"] != "ignored":
             continue
         lines.append(
-            f"| {row['case_id']} | {row['fault_exposed']} | {row['propagation_verdict']} | "
-            f"{row['plan_writes_identical']} | {row['final_state_identical']} |"
+            f"| {row['case_id']} | {row['pair_valid']} | {row['fault_exposed']} | "
+            f"{row['propagation_verdict']} | {row['plan_writes_identical']} | "
+            f"{row['final_state_identical']} |"
         )
     mismatches = report["expectation_mismatches"]
     lines += ["", "## Expectation mismatches", ""]
@@ -222,7 +244,7 @@ def analyse(rows: Sequence[dict[str, Any]], outdir: Path, with_figures: bool = T
         json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     (outdir / "report.md").write_text(render_markdown(report, rows), encoding="utf-8")
-    if with_figures:
+    if with_figures and valid_rows(rows):
         build_figures(rows, outdir / "figures")
     return report
 

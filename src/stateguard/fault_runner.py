@@ -97,11 +97,36 @@ def planner_writes(trace: AttemptTrace) -> tuple[dict[str, Any], ...]:
     return ()
 
 
+# An error the provider or the transport raised, as opposed to a model that
+# answered badly. Schema and parse failures are model behaviour and stay in the
+# results; these mean the run never got a fair chance and must not be counted.
+INFRASTRUCTURE_PREFIXES = ("API request failed", "Adapter exception")
+
+
+def infrastructure_errors(trace: AttemptTrace) -> tuple[dict[str, Any], ...]:
+    """Provider or transport failures recorded anywhere in this run."""
+    found = []
+    for call in trace.model_calls:
+        for attempt in call.get("attempts", [call]):
+            error = attempt.get("error") or ""
+            if error.startswith(INFRASTRUCTURE_PREFIXES):
+                found.append({
+                    "agent_id": call.get("agent_id"),
+                    "error": error,
+                    "http_status": attempt.get("http_status"),
+                })
+    return tuple(found)
+
+
 def propagation_verdict(trace: AttemptTrace) -> str:
     """What actually happened to the injected value in this run."""
     if not plan_completed_from_results(trace.results):
         return "blocked"
-    return "consumed" if trace.fault_consumed else "ignored"
+    if trace.fault_consumed:
+        return "consumed"
+    if not planner_writes(trace) or trace.execution_blocked:
+        return "refused"
+    return "ignored"
 
 
 @dataclass(frozen=True)
@@ -113,6 +138,12 @@ class RunOutcome:
     check: CheckResult
     plan_writes: tuple[dict[str, Any], ...]
     verdict: str
+    api_errors: tuple[dict[str, Any], ...] = ()
+
+    @property
+    def valid(self) -> bool:
+        """False when the provider failed, so this run measures nothing."""
+        return not self.api_errors
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -122,6 +153,8 @@ class RunOutcome:
             "checker": self.check.as_dict(),
             "plan_writes": [dict(write) for write in self.plan_writes],
             "propagation_verdict": self.verdict,
+            "valid": self.valid,
+            "api_errors": list(self.api_errors),
             "trace": asdict(self.trace),
         }
 
@@ -155,6 +188,7 @@ def run_attempt(
         check=check_trace(task.task, trace),
         plan_writes=planner_writes(trace),
         verdict=propagation_verdict(trace),
+        api_errors=infrastructure_errors(trace),
     )
 
 
@@ -185,13 +219,34 @@ class PairedResult:
         }
 
 
+def invalid_reason(clean: RunOutcome, fault: RunOutcome) -> str | None:
+    """Why this pair cannot be counted, or None when it can.
+
+    A pair is only evidence if the provider answered both runs and the clean
+    control actually succeeded. Without a working control there is nothing to
+    compare the faulty run against.
+    """
+    if not clean.valid:
+        return "api_errors_in_clean_run"
+    if not fault.valid:
+        return "api_errors_in_fault_run"
+    if not clean.check.success:
+        return "clean_control_failed"
+    return None
+
+
 def compare(clean: RunOutcome, fault: RunOutcome, case: FaultCase) -> dict[str, Any]:
     """Everything the paired design lets us say about this one case."""
     differences = state_differences(clean.trace.final_state, fault.trace.final_state)
     evidence = fault.trace.fault_evidence[0] if fault.trace.fault_evidence else {}
     verdict = fault.verdict
     exposed = bool(evidence.get("exposed_to_planner"))
+    reason = invalid_reason(clean, fault)
     return {
+        "pair_valid": reason is None,
+        "invalid_reason": reason,
+        "api_errors_clean": len(clean.api_errors),
+        "api_errors_fault": len(fault.api_errors),
         "fault_exposed_to_planner": exposed,
         "fault_consumed": bool(fault.trace.fault_consumed),
         "matching_writes": evidence.get("matching_writes", []),
@@ -206,7 +261,8 @@ def compare(clean: RunOutcome, fault: RunOutcome, case: FaultCase) -> dict[str, 
         # A control case is only proven by the clean run: exposed to the planner,
         # yet the plan and the final state are byte-for-byte the clean ones.
         "ignored_without_propagation": (
-            exposed
+            reason is None
+            and exposed
             and verdict == "ignored"
             and clean.plan_writes == fault.plan_writes
             and not differences

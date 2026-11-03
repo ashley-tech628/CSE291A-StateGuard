@@ -28,6 +28,10 @@ ROW_FIELDS = (
     "trigger_on_calls",
     "policy",
     "seed",
+    "pair_valid",
+    "invalid_reason",
+    "api_errors_clean",
+    "api_errors_fault",
     "clean_success",
     "fault_success",
     "fault_exposed",
@@ -75,6 +79,10 @@ def paired_row(result: PairedResult) -> dict[str, Any]:
         "trigger_on_calls": "|".join(str(n) for n in result.case.trigger_on_calls),
         "policy": result.policy,
         "seed": result.seed,
+        "pair_valid": cmp["pair_valid"],
+        "invalid_reason": cmp["invalid_reason"] or "",
+        "api_errors_clean": cmp["api_errors_clean"],
+        "api_errors_fault": cmp["api_errors_fault"],
         "clean_success": clean.check.success,
         "fault_success": fault.check.success,
         "fault_exposed": cmp["fault_exposed_to_planner"],
@@ -119,6 +127,7 @@ def _group_stats(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "exposed": sum(bool(r["fault_exposed"]) for r in rows),
         "consumed": sum(r["propagation_verdict"] == "consumed" for r in rows),
         "ignored": sum(r["propagation_verdict"] == "ignored" for r in rows),
+        "refused": sum(r["propagation_verdict"] == "refused" for r in rows),
         "blocked": sum(r["propagation_verdict"] == "blocked" for r in rows),
         "expectation_match_rate": _rate(
             sum(bool(r["matches_expectation"]) for r in rows), total
@@ -141,34 +150,52 @@ def _by(rows: Sequence[dict[str, Any]], key: str) -> dict[str, Any]:
 
 
 def build_report(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """Overall numbers plus the breakdowns the evaluation is required to report."""
-    controls = [r for r in rows if r["expected_propagation"] == "ignored"]
+    """Overall numbers plus the breakdowns the evaluation is required to report.
+
+    Every statistic below is computed over VALID pairs only. A pair whose clean
+    control failed, or whose runs hit provider errors, measures nothing and is
+    reported separately rather than averaged in.
+    """
+    valid = [r for r in rows if r["pair_valid"]]
+    invalid = [r for r in rows if not r["pair_valid"]]
+    controls = [r for r in valid if r["expected_propagation"] == "ignored"]
     mismatches = [
         {
             "case_id": r["case_id"],
             "expected": r["expected_propagation"],
             "observed": r["propagation_verdict"],
         }
-        for r in rows
+        for r in valid
         if not r["matches_expectation"]
     ]
+    reasons: dict[str, int] = {}
+    for row in invalid:
+        reasons[row["invalid_reason"]] = reasons.get(row["invalid_reason"], 0) + 1
     return {
-        "report_schema_version": 1,
-        "pairs": len(rows),
-        "overall": _group_stats(rows) if rows else {},
-        "by_fault_class": _by(rows, "fault_class"),
-        "by_fault_type": _by(rows, "fault_type"),
-        "by_target_agent": _by(rows, "target_agent"),
+        "report_schema_version": 2,
+        "pairs": len(valid),
+        "pairs_run": len(rows),
+        "overall": _group_stats(valid) if valid else {},
+        "by_fault_class": _by(valid, "fault_class"),
+        "by_fault_type": _by(valid, "fault_type"),
+        "by_target_agent": _by(valid, "target_agent"),
         "control_cases": {
             "count": len(controls),
             "proven_ignored": sum(bool(r["ignored_without_propagation"]) for r in controls),
             "case_ids": [r["case_id"] for r in controls],
         },
         "expectation_mismatches": mismatches,
+        "invalid_pairs": {
+            "count": len(invalid),
+            "reasons": reasons,
+            "pair_ids": [r["pair_id"] for r in invalid],
+        },
         "note": (
-            "Accidental faults are judged on fault_success_rate; adversarial faults "
-            "are judged on unauthorized_commits. A consumed fault means a faulty "
-            "value appeared in a plan write, not that recovery was attempted."
+            "Statistics cover valid pairs only. Accidental faults are judged on "
+            "fault_success_rate; adversarial faults on unauthorized_commits. "
+            "'consumed' means a faulty value appeared in a plan write; 'refused' "
+            "means the planner declined to deploy, which changes behaviour without "
+            "propagating a value; 'blocked' means the pipeline stopped earlier."
         ),
     }
 
@@ -190,11 +217,13 @@ def write_report_json(report: dict[str, Any], path: Path) -> None:
 def read_summary_csv(path: Path) -> list[dict[str, Any]]:
     """Read a summary back, restoring booleans and numbers from their CSV text."""
     booleans = {
+        "pair_valid",
         "clean_success", "fault_success", "fault_exposed", "fault_consumed",
         "matches_expectation", "ignored_without_propagation",
         "plan_writes_identical", "final_state_identical",
     }
     integers = {
+        "api_errors_clean", "api_errors_fault",
         "seed", "changed_state_keys", "affected_stages", "unauthorized_attempts",
         "unauthorized_commits", "committed_actions_clean", "committed_actions_fault",
         "inference_calls_clean", "inference_calls_fault", "model_calls_fault",

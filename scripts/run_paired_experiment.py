@@ -91,19 +91,25 @@ def main() -> None:
         write_paired_artifacts(result, workdir)
         row = paired_row(result)
         rows.append(row)
+        flag = "" if row["pair_valid"] else f"  INVALID({row['invalid_reason']})"
         print(
             f"{case.case_id:38s} verdict={row['propagation_verdict']:8s} "
             f"expected={row['expected_propagation']:8s} "
             f"fault_success={str(row['fault_success']):5s} "
-            f"unauth={row['unauthorized_attempts']}/{row['unauthorized_commits']}",
+            f"unauth={row['unauthorized_attempts']}/{row['unauthorized_commits']}{flag}",
             flush=True,
         )
 
     write_summary_csv(rows, root / "summary.csv")
     report = analyse(rows, root, with_figures=not args.no_figures)
     mismatches = report["expectation_mismatches"]
+    invalid = report["invalid_pairs"]
     print()
     print(json.dumps(report["overall"], indent=2))
+    print(f"Valid pairs: {report['pairs']}/{report['pairs_run']}")
+    if invalid["count"]:
+        print("EXCLUDED pairs:", json.dumps(invalid["reasons"]))
+        print("  ", ", ".join(invalid["pair_ids"]))
     print("Control cases proven ignored:",
           f"{report['control_cases']['proven_ignored']}/{report['control_cases']['count']}")
     if mismatches:

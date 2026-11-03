@@ -16,7 +16,12 @@ from .schemas import AgentResult
 
 FaultType = Literal["incorrect", "stale", "timeout", "adversarial"]
 FaultClass = Literal["accidental", "adversarial"]
-Propagation = Literal["consumed", "ignored", "blocked"]
+# consumed: a plan write carried the faulty value.
+# ignored:  the planner saw it, deployed anyway, and no write carried it.
+# refused:  the planner saw it and declined to deploy - the fault changed
+#           behaviour without ever reaching a write.
+# blocked:  the pipeline stopped before the planner ran.
+Propagation = Literal["consumed", "ignored", "refused", "blocked"]
 
 ANALYSIS_AGENTS = ("config", "dependency", "resource")
 

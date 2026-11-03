@@ -115,3 +115,61 @@ def test_analyse_works_without_plotting(tmp_path, rows):
     report = analyse(rows, tmp_path, with_figures=False)
     assert report["pairs"] == len(rows)
     assert not (tmp_path / "figures").exists()
+
+
+# --- Invalid pairs are excluded, not averaged in ----------------------------
+
+
+def invalidated(row, reason="clean_control_failed"):
+    bad = dict(row)
+    bad.update(pair_id="excluded-pair", pair_valid=False, invalid_reason=reason)
+    return bad
+
+
+def test_all_deterministic_pairs_are_valid(rows):
+    assert all(row["pair_valid"] for row in rows)
+    assert build_report(rows)["invalid_pairs"]["count"] == 0
+
+
+def test_report_excludes_invalid_pairs_from_every_statistic(rows):
+    report = build_report(list(rows) + [invalidated(rows[0])])
+    assert report["pairs_run"] == len(rows) + 1
+    assert report["pairs"] == len(rows)
+    assert report["overall"]["pairs"] == len(rows)
+    assert report["invalid_pairs"]["count"] == 1
+    assert report["invalid_pairs"]["reasons"] == {"clean_control_failed": 1}
+    assert report["invalid_pairs"]["pair_ids"] == ["excluded-pair"]
+
+
+def test_invalid_pair_cannot_count_as_an_expectation_mismatch(rows):
+    bad = invalidated(rows[0], reason="api_errors_in_fault_run")
+    bad["matches_expectation"] = False
+    assert build_report(list(rows) + [bad])["expectation_mismatches"] == []
+
+
+def test_invalid_control_pair_is_not_counted_as_proven(rows):
+    control = next(r for r in rows if r["expected_propagation"] == "ignored")
+    others = [r for r in rows if r is not control]
+    report = build_report(others + [invalidated(control)])
+    assert report["control_cases"]["count"] == 0
+
+
+def test_report_counts_the_refused_verdict(rows):
+    refused = dict(rows[0], propagation_verdict="refused", pair_id="refused-pair")
+    overall = build_report(list(rows) + [refused])["overall"]
+    assert overall["refused"] == 1
+
+
+def test_markdown_warns_about_excluded_pairs(rows):
+    text = render_markdown(build_report(list(rows) + [invalidated(rows[0])]), rows)
+    assert "excluded" in text
+    assert "clean_control_failed" in text
+
+
+def test_validity_round_trips_through_csv(tmp_path, rows):
+    path = tmp_path / "summary.csv"
+    write_summary_csv(list(rows) + [invalidated(rows[0])], path)
+    restored = read_summary_csv(path)
+    assert restored[-1]["pair_valid"] is False
+    assert restored[-1]["invalid_reason"] == "clean_control_failed"
+    assert all(row["pair_valid"] is True for row in restored[:-1])
