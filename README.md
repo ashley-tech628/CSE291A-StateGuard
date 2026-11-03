@@ -90,12 +90,12 @@ The Phase 1 comparison includes:
 
 ### Phase 2: Selective Recovery
 
-Phase 2 will implement and compare two selective recovery policies:
+Phase 2 compares two selective recovery policies:
 
 - Dependency-only replay, which invalidates downstream results using result dependencies
 - State-aware selective recovery, which also validates field versions, tool effects, external updates, and action-ledger state
 
-The planned recovery procedure is:
+The state-aware recovery procedure is:
 
 1. Receive the known faulty result ID from the experiment harness.
 2. Traverse downstream result and state dependencies.
@@ -117,19 +117,23 @@ Fault detection is intentionally separated from recovery in the core evaluation.
 | SQLite field-level versions | Implemented |
 | Atomic state and event transactions | Implemented |
 | Action ledger and idempotent retries | Implemented |
-| Config, Dependency, and Resource agents | Deterministic implementation |
-| Planner and Executor | Deterministic implementation |
+| Config, Dependency, and Resource agents | Deterministic and optional TritonAI-backed implementations |
+| Planner and Executor | Deterministic and optional TritonAI-backed planning; controlled executor |
 | Controlled authorization checks | Implemented |
 | Incorrect, stale, timeout, and adversarial injection | Implemented |
 | No-recovery baseline | Implemented |
-| Full-restart baseline with external-event replay | Implemented |
+| Full-restart baseline with external-event replay | Implemented for ordered, version-checked simulated events |
 | Always-verify baseline | Implemented |
 | Trace, SQLite, CSV, and JSON export | Implemented |
-| Real LLM adapter and structured-output validation | Planned |
+| Real LLM adapter and structured-output validation | Implemented; see [LLM setup](LLM_SETUP.md) |
+| Versioned workload and 11-case fault library | Implemented |
+| Paired clean/fault runner, checker, metrics, and figures | Implemented |
+| Durable agent-result provenance and typed impact graph | Implemented; see [Runtime and recovery notes](C_RUNTIME.md) |
+| State-aware selective replay | Implemented for controlled SQLite actions; conflict and irreversible effects reported |
 | End-to-end lost-acknowledgment experiment | Planned |
 | Dependency topology expansion | Planned |
-| Dependency-only selective recovery | Phase 2 |
-| State-aware selective recovery | Phase 2 |
+| Dependency-only selective recovery | Planned comparison |
+| State-aware selective recovery | Initial controlled implementation |
 | Recovery ablations and conflict-density experiments | Phase 2 |
 
 ## Deterministic Pilot
@@ -153,7 +157,8 @@ For seed 7:
 - Full restart produced a correct final state in all 32 fault scenarios and preserved the administrator update.
 - Always verify corrected all 32 faults before planner consumption.
 - Unauthorized committed actions were zero under every policy.
-- The repository contains 17 passing automated tests.
+- The original pilot had 17 tests. The current suite also covers model integration,
+  paired evaluation, and provenance; run `pytest -q` for the current count.
 
 The deterministic backend uses fixed structured outputs. The simulated token values are cost units for testing metrics and are not measured LLM tokens or evidence of model performance.
 
@@ -171,7 +176,10 @@ The full evaluation will measure:
 | Overhead | Clean-run tracking latency, log size, version checks |
 | Conflict handling | Prevented lost updates, replanning, partial and blocked recoveries |
 
-Real LLM experiments will use fixed model configurations and multiple seeds. Results will report means, failure details, confidence intervals, and p50/p95 latency.
+The model adapter records the model identifier, prompt, response, latency, and
+reported token usage. The provider is not given a seed; repetition labels the
+fault schedule and run. Larger LLM experiments still need failure analysis,
+uncertainty estimates, and p50/p95 latency.
 
 ## Installation
 
@@ -201,6 +209,33 @@ Alternatively:
 
 The runner cleans only output directories that contain a StateGuard ownership marker. It refuses to clean a nonempty directory that it did not create.
 
+Run a paired clean/fault experiment with either recovery policy:
+
+    python scripts/run_paired_experiment.py --policy full_restart --output results/paired-restart --seed 7 --no-figures
+    python scripts/run_paired_experiment.py --policy selective_recovery --output results/paired-selective --seed 7 --no-figures
+
+For a real-model pilot on TritonAI, set `OPENAI_BASE_URL` to
+`https://tritonai-api.ucsd.edu/v1` and provide `OPENAI_API_KEY` in the shell.
+The [Phase 1 AWS/TritonAI experiment](PHASE1_C_RESULTS.md) reports three
+matched baselines across three seeds, including invalid-pair exclusions,
+actual token and latency measurements, figures, and complete paired traces.
+Start with one case and pace calls to avoid exhausting the key's request window:
+
+    python scripts/run_paired_experiment.py --llm --model api-glm-5.3-flash --policy selective_recovery --cases incorrect-db-port-3306 --seed 7 --max-attempts 3 --request-interval 5 --output results/llm-selective-pilot --no-figures
+
+The adapter records per-request waits and bounded retries. It honors a provider
+`Retry-After` value on HTTP 429; otherwise it uses bounded exponential backoff.
+If a 429 persists after retries, the paired runner stops and exits with code 2.
+Check `run_status.json`: only `complete: true` means the requested case set
+finished. An incomplete report and its failed traces remain available for
+diagnosis, but its success rates must not be used for policy comparison.
+
+Both commands save the initial faulty attempt and the recovery attempt. The
+selective policy operates on the original SQLite store; full restart creates
+a new store and replays recorded administrator events. See [Runtime and
+Recovery Work](C_RUNTIME.md) for event schedules, conflict behavior, and
+provenance inspection.
+
 ## Experiment Artifacts
 
 A complete run produces:
@@ -209,6 +244,9 @@ A complete run produces:
 - <code>report.json</code>: aggregate metrics grouped by policy
 - <code>runs/&lt;scenario&gt;/trace.json</code>: results, dependencies, verification decisions, actions, state events, final state, and checker output
 - <code>runs/&lt;scenario&gt;/*.sqlite3</code>: versioned state and action ledger for each attempt
+
+The paired runner additionally saves clean and faulty traces, a recovery trace
+when applicable, `paired.json`, `summary.csv`, and `report.json`.
 
 The central trace chain is:
 
@@ -226,6 +264,10 @@ The <code>fault_consumed</code> metric is true only when the planner actually us
 - <code>src/stateguard/state.py</code>: versioned SQLite state, events, and idempotency
 - <code>src/stateguard/workflow.py</code>: agents, planner, executor, faults, and checkers
 - <code>src/stateguard/experiment.py</code>: workloads, baselines, metrics, and artifact export
+- <code>src/stateguard/fault_runner.py</code>: paired clean/fault and recovery runs
+- <code>src/stateguard/provenance.py</code>: typed dependency and impact graph
+- <code>src/stateguard/recovery.py</code>: selective recomputation and conditional replay
+- <code>src/stateguard/recovery_assessment.py</code>: reuse and conflict preflight
 - <code>scripts/run_phase1.py</code>: experiment entry point
 - <code>tests/test_state.py</code>: state version and idempotency tests
 - <code>tests/test_experiment.py</code>: propagation, authorization, baseline, and matrix tests
@@ -235,18 +277,14 @@ The <code>fault_consumed</code> metric is true only when the planner actually us
 
 ### Near-term Phase 1 work
 
-- Add a real model adapter and structured-output validation
-- Record prompts, responses, model configuration, actual tokens, and retries
 - Add planner faults, executor faults, tool failures, and lost acknowledgments
 - Add chain, fan-out, diamond, independent-branch, and ignored-result workflows
-- Run multiple seeds and produce the Phase 1 analysis and figures
+- Expand LLM runs across tasks and report uncertainty and failure cases
 
 ### Phase 2 work
 
-- Build the typed dependency graph and impact analyzer
 - Implement dependency-only replay
-- Implement version validation and state-aware reuse
-- Add safe replay, conditional compensation, and blocked-recovery reporting
+- Add a controlled irreversible-effect case and compensation policy
 - Compare policies under unrelated updates, same-field conflicts, and shared-resource conflicts
 - Measure invalidation precision, retained valid work, stale reuse, and recovery overhead
 - Run ablations for provenance precision, version checks, and action-ID deduplication

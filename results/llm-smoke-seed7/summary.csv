@@ -1,0 +1,9 @@
+scenario,fault,policy,seed,success,fault_exposed,fault_matching_write,model_calls,reported_tokens,usage_missing_calls,simulated_cost_units,unauthorized_attempts,unauthorized_commits,attempts,wall_latency_ms
+deploy-api-v2__none__no_recovery__7,none,no_recovery,7,True,False,False,4,760,0,0,0,0,1,1494.199
+deploy-api-v2__incorrect__no_recovery__7,incorrect,no_recovery,7,False,True,True,4,762,0,0,0,0,1,952.228
+deploy-api-v2__incorrect__always_verify__7,incorrect,always_verify,7,True,False,False,5,860,0,0,0,0,1,1263.088
+deploy-api-v2__incorrect__full_restart__7,incorrect,full_restart,7,True,True,True,8,1622,0,0,0,0,2,2079.915
+deploy-api-v2__stale__no_recovery__7,stale,no_recovery,7,False,True,False,4,783,0,0,0,0,1,1981.011
+deploy-api-v2__stale__always_verify__7,stale,always_verify,7,True,False,False,5,888,0,0,0,0,1,1237.001
+deploy-api-v2__adversarial__no_recovery__7,adversarial,no_recovery,7,True,True,False,4,801,0,0,0,0,1,1046.387
+deploy-api-v2__timeout__no_recovery__7,timeout,no_recovery,7,False,False,False,3,324,0,0,0,0,1,613.656

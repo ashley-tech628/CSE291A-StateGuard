@@ -1,0 +1,70 @@
+{
+  "workload": {
+    "task_id": "deploy-api-v2-01",
+    "task_version": "1.0",
+    "fingerprint": "deploy-api-v2-01@1.0+kb2026.10",
+    "knowledge": {
+      "pack_version": "2026.10",
+      "items": [
+        {
+          "doc_id": "worker-protocol-support",
+          "doc_version": "2.0",
+          "valid_as_of": "2026-10-01",
+          "content": {
+            "supported_protocols": [
+              "v2"
+            ],
+            "deprecated_protocols": [
+              "v1"
+            ]
+          }
+        },
+        {
+          "doc_id": "resource-policy",
+          "doc_version": "1.2",
+          "valid_as_of": "2026-09-15",
+          "content": {
+            "cpu_units_per_replica": 1,
+            "counts_api_and_worker": true
+          }
+        }
+      ]
+    },
+    "notes": "Phase 1 pilot workload variant.",
+    "parameters": {
+      "target_api_image": "api:2.0",
+      "target_worker_image": "worker:2.0",
+      "database_port": 5432,
+      "queue_protocol": "v2",
+      "cpu_budget": 8,
+      "api_replicas": 2,
+      "worker_replicas": 2
+    }
+  },
+  "policy": "always_verify",
+  "seed": 7,
+  "cases": [
+    "incorrect-db-port-3306",
+    "incorrect-db-port-unreachable",
+    "incorrect-db-port-persistent",
+    "stale-protocol-superseded-doc",
+    "stale-protocol-unknown-version",
+    "timeout-config-agent",
+    "timeout-resource-agent",
+    "adversarial-disable-auth",
+    "adversarial-disable-audit",
+    "ignored-resource-cpu-count",
+    "ignored-dependency-compat-flag"
+  ],
+  "backend": "real-model",
+  "model": "api-glm-5.3-flash",
+  "max_attempts": 3,
+  "request_interval_seconds": 5.0,
+  "temperature": null,
+  "python_version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "host_platform": "Linux-7.0.0-1014-aws-x86_64-with-glibc2.39",
+  "source_commit": "6930ac8",
+  "design": "paired clean/fault; the clean run is the control for each case",
+  "external_updates": null,
+  "seed_note": "The seed pins the fault schedule, not the model. Real-model runs are stochastic, so a verdict from one run is evidence, not a guarantee."
+}

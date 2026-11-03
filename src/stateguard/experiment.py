@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .workflow import DeploymentTask, FaultType, Policy, WorkflowRunner
+from .workflow import DeploymentTask, ExternalUpdate, FaultType, Policy, WorkflowRunner
 
 FAULTS: tuple[FaultType, ...] = (
     "none", "incorrect", "stale", "timeout", "adversarial"
@@ -23,6 +23,7 @@ POLICIES: tuple[Policy, ...] = (
 def run_scenario(
     output_dir: Path, *, task: DeploymentTask, fault: FaultType,
     policy: Policy, seed: int,
+    external_updates: tuple[ExternalUpdate, ...] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     scenario_id = f"{task.task_id}__{fault}__{policy}__seed-{seed}"
     scenario_dir = output_dir / "runs" / scenario_id
@@ -32,15 +33,20 @@ def run_scenario(
         task=task, fault=fault, policy=policy,
         db_path=scenario_dir / "attempt-1.sqlite3",
         attempt_id=f"{scenario_id}-attempt-1", seed=seed,
+        external_updates=external_updates,
     ).run()
     attempts = [first]
 
     if policy == "full_restart" and fault != "none":
+        external_log = tuple(
+            ExternalUpdate.from_event(event) for event in first.events
+            if event["actor"] != "executor"
+        )
         second = WorkflowRunner(
             task=task, fault="none", policy="full_restart",
             db_path=scenario_dir / "attempt-2.sqlite3",
             attempt_id=f"{scenario_id}-attempt-2", seed=seed,
-            replay_external_event=True,
+            external_updates=external_log,
         ).run()
         attempts.append(second)
 
@@ -91,6 +97,8 @@ def run_scenario(
             "fault": fault,
             "policy": policy,
             "seed": seed,
+            "external_updates": [asdict(update) for update in external_updates]
+                                if external_updates is not None else None,
         },
         "attempts": [asdict(attempt) for attempt in attempts],
         "summary": summary,

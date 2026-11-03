@@ -1,0 +1,190 @@
+"""Run paired clean/fault experiments over the fault case library.
+
+Each pair runs the same versioned workload twice - once clean, once with one
+scheduled fault case - and saves two complete traces plus the comparison that
+shows whether the faulty result actually reached the planner.
+
+    python scripts/run_paired_experiment.py --output results/paired --seed 7
+    python scripts/run_paired_experiment.py --cases ignored-resource-cpu-count
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import sys
+from dataclasses import asdict
+from pathlib import Path
+
+from stateguard.analysis import analyse
+from stateguard.fault_runner import run_paired, write_paired_artifacts
+from stateguard.faults import CASE_LIBRARY, get_case
+from stateguard.metrics import paired_row, write_summary_csv
+from stateguard.workloads import default_task, find_task
+from stateguard.workflow import ExternalUpdate
+
+MARKER = ".stateguard-generated"
+
+
+def unrecovered_rate_limit(result: object) -> bool:
+    """A 429 that exhausted the adapter's retries invalidates this pair."""
+    traces = (result.clean.trace, result.fault.trace,
+              *result.fault.recovery_attempts)
+    return any(
+        call.get("status") != "ok"
+        and call.get("attempts")
+        and call["attempts"][-1].get("http_status") == 429
+        for trace in traces for call in trace.model_calls
+    )
+
+
+def prepare_output(path: Path) -> Path:
+    path = path.resolve()
+    if path.exists() and any(path.iterdir()) and not (path / MARKER).exists():
+        raise SystemExit(f"refusing to write into an unowned directory: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    (path / MARKER).write_text("StateGuard paired experiment output\n", encoding="utf-8")
+    return path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=Path("results/paired"))
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--policy", default="no_recovery",
+                        choices=["no_recovery", "full_restart", "always_verify",
+                                 "selective_recovery"])
+    parser.add_argument("--task", help="task_id; defaults to the first pilot workload")
+    parser.add_argument("--cases", nargs="*", help="case ids; defaults to the whole library")
+    parser.add_argument("--no-figures", action="store_true")
+    parser.add_argument("--llm", action="store_true",
+                        help="drive the agents with a real model instead of the "
+                             "deterministic backend (needs OPENAI_BASE_URL and OPENAI_API_KEY)")
+    parser.add_argument("--model", help="model id; defaults to STATEGUARD_MODEL")
+    parser.add_argument("--max-attempts", type=int, default=1)
+    parser.add_argument("--request-interval", type=float, default=0.0,
+                        help="minimum seconds between real-model API requests")
+    parser.add_argument("--temperature", type=float)
+    parser.add_argument("--external-events", type=Path,
+                        help='JSON list of {"key": ..., "value": ..., "actor": "admin"} updates')
+    args = parser.parse_args()
+    if args.request_interval < 0:
+        parser.error("--request-interval must be nonnegative")
+
+    task = find_task(args.task) if args.task else default_task()
+    cases = [get_case(name) for name in args.cases] if args.cases else list(CASE_LIBRARY)
+    root = prepare_output(args.output)
+    external_updates = None
+    if args.external_events:
+        records = json.loads(args.external_events.read_text(encoding="utf-8"))
+        if not isinstance(records, list) or not all(isinstance(item, dict) for item in records):
+            parser.error("--external-events must contain a JSON list of objects")
+        try:
+            external_updates = tuple(ExternalUpdate(**item) for item in records)
+        except (TypeError, ValueError) as exc:
+            parser.error(f"invalid external event: {exc}")
+
+    adapter = None
+    if args.llm:
+        from stateguard.model_adapter import ModelAdapter
+
+        adapter = ModelAdapter(
+            model=args.model,
+            max_attempts=args.max_attempts,
+            request_interval_seconds=args.request_interval,
+            temperature=args.temperature,
+        )
+
+    (root / "manifest.json").write_text(json.dumps({
+        "workload": task.as_dict(),
+        "policy": args.policy,
+        "seed": args.seed,
+        "cases": [case.case_id for case in cases],
+        "backend": "real-model" if adapter else "deterministic",
+        "model": getattr(adapter, "model", None),
+        "max_attempts": args.max_attempts if adapter else None,
+        "request_interval_seconds": args.request_interval if adapter else None,
+        "temperature": args.temperature if adapter else None,
+        "python_version": sys.version,
+        "host_platform": platform.platform(),
+        "source_commit": os.environ.get("STATEGUARD_REVISION"),
+        "design": "paired clean/fault; the clean run is the control for each case",
+        "external_updates": [asdict(update) for update in external_updates]
+                            if external_updates is not None else None,
+        "seed_note": (
+            "The seed pins the fault schedule, not the model. Real-model runs are "
+            "stochastic, so a verdict from one run is evidence, not a guarantee."
+        ),
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    rows = []
+    stopped_case = None
+    for case in cases:
+        workdir = root / "pairs" / f"{case.case_id}__{args.policy}__seed-{args.seed}"
+        result = run_paired(
+            task=task, case=case, policy=args.policy, seed=args.seed,
+            workdir=workdir, model_adapter=adapter,
+            external_updates=external_updates,
+        )
+        write_paired_artifacts(result, workdir)
+        row = paired_row(result)
+        rows.append(row)
+        flag = "" if row["pair_valid"] else f"  INVALID({row['invalid_reason']})"
+        print(
+            f"{case.case_id:38s} verdict={row['propagation_verdict']:8s} "
+            f"expected={row['expected_propagation']:8s} "
+            f"fault_success={str(row['fault_success']):5s} "
+            f"unauth={row['unauthorized_attempts']}/{row['unauthorized_commits']}{flag}",
+            flush=True,
+        )
+        if adapter is not None and unrecovered_rate_limit(result):
+            stopped_case = case.case_id
+            print("Stopping after unrecovered HTTP 429; this run is incomplete.",
+                  flush=True)
+            break
+
+    write_summary_csv(rows, root / "summary.csv")
+    report = analyse(rows, root, with_figures=not args.no_figures)
+    run_status = {
+        "complete": stopped_case is None,
+        "planned_pairs": len(cases),
+        "recorded_pairs": len(rows),
+        "stopped_case": stopped_case,
+        "reason": "unrecovered_http_429" if stopped_case else None,
+    }
+    (root / "run_status.json").write_text(json.dumps(run_status, indent=2),
+                                           encoding="utf-8")
+    report["run_status"] = run_status
+    (root / "report.json").write_text(json.dumps(report, indent=2,
+                                                 ensure_ascii=False), encoding="utf-8")
+    if stopped_case:
+        report_md = root / "report.md"
+        report_md.write_text(
+            "# INCOMPLETE: unrecovered HTTP 429\n\n"
+            "The summary includes a failed API pair and cannot support policy "
+            "comparisons. See run_status.json and the saved traces.\n\n"
+            + report_md.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+    mismatches = report["expectation_mismatches"]
+    invalid = report["invalid_pairs"]
+    print()
+    print(json.dumps(report["overall"], indent=2))
+    print(f"Valid pairs: {report['pairs']}/{report['pairs_run']}")
+    if invalid["count"]:
+        print("EXCLUDED pairs:", json.dumps(invalid["reasons"]))
+        print("  ", ", ".join(invalid["pair_ids"]))
+    print("Control cases proven ignored:",
+          f"{report['control_cases']['proven_ignored']}/{report['control_cases']['count']}")
+    if mismatches:
+        print("Expectation mismatches:", json.dumps(mismatches))
+    print("Saved:", root)
+    # expected_propagation is declared for the deterministic no-recovery
+    # baseline, so a mismatch is only a failure under exactly those conditions.
+    strict = args.policy == "no_recovery" and adapter is None
+    raise SystemExit(2 if stopped_case else 1 if mismatches and strict else 0)
+
+
+if __name__ == "__main__":
+    main()

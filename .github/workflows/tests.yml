@@ -9,5 +9,10 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install -e '.[dev]'
+      - run: python -m pip install -r requirements-eval.txt
       - run: pytest -q
       - run: python scripts/run_phase1.py --output results/phase1-pilot --seed 7
+      - run: python scripts/run_paired_experiment.py --output results/paired-ci --seed 7
+      - run: python scripts/run_paired_experiment.py --policy full_restart --cases incorrect-db-port-3306 --output results/restart-ci --no-figures
+      - run: python scripts/run_paired_experiment.py --policy selective_recovery --cases incorrect-db-port-3306 --output results/selective-ci --no-figures
+      - run: python scripts/inspect_provenance.py results/paired-ci/pairs/incorrect-db-port-3306__no_recovery__seed-7/paired.json --output results/paired-ci/incorrect-port-impact.json
