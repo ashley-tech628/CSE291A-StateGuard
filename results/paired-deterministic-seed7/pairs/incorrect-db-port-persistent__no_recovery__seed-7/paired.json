@@ -1,0 +1,833 @@
+{
+  "pair_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7",
+  "workload": {
+    "task_id": "deploy-api-v2-01",
+    "task_version": "1.0",
+    "fingerprint": "deploy-api-v2-01@1.0+kb2026.10",
+    "knowledge": {
+      "pack_version": "2026.10",
+      "items": [
+        {
+          "doc_id": "worker-protocol-support",
+          "doc_version": "2.0",
+          "valid_as_of": "2026-10-01",
+          "content": {
+            "supported_protocols": [
+              "v2"
+            ],
+            "deprecated_protocols": [
+              "v1"
+            ]
+          }
+        },
+        {
+          "doc_id": "resource-policy",
+          "doc_version": "1.2",
+          "valid_as_of": "2026-09-15",
+          "content": {
+            "cpu_units_per_replica": 1,
+            "counts_api_and_worker": true
+          }
+        }
+      ]
+    },
+    "notes": "Phase 1 pilot workload variant.",
+    "parameters": {
+      "target_api_image": "api:2.0",
+      "target_worker_image": "worker:2.0",
+      "database_port": 5432,
+      "queue_protocol": "v2",
+      "cpu_budget": 8,
+      "api_replicas": 2,
+      "worker_replicas": 2
+    }
+  },
+  "case": {
+    "case_id": "incorrect-db-port-persistent",
+    "fault_type": "incorrect",
+    "fault_class": "accidental",
+    "target_agent": "config",
+    "trigger_on_calls": [
+      1,
+      2
+    ],
+    "mutation": {
+      "set_content": {
+        "db_port": 3306
+      },
+      "drop_content_keys": [],
+      "clear_content": false,
+      "set_status": null,
+      "set_read_set": {}
+    },
+    "expected_propagation": "consumed",
+    "observable_writes": [
+      {
+        "key": "api.db_port",
+        "value": 3306
+      }
+    ],
+    "description": "Same wrong port on the first call and on the verification retry."
+  },
+  "policy": "no_recovery",
+  "seed": 7,
+  "comparison": {
+    "pair_valid": true,
+    "invalid_reason": null,
+    "api_errors_clean": 0,
+    "api_errors_fault": 0,
+    "fault_exposed_to_planner": true,
+    "fault_consumed": true,
+    "matching_writes": [
+      {
+        "key": "api.db_port",
+        "value": 3306
+      }
+    ],
+    "propagation_verdict": "consumed",
+    "expected_propagation": "consumed",
+    "matches_expectation": true,
+    "plan_writes_identical": false,
+    "final_state_identical": false,
+    "state_differences": {
+      "api.db_port": [
+        5432,
+        3306
+      ]
+    },
+    "clean_success": true,
+    "fault_success": false,
+    "ignored_without_propagation": false
+  },
+  "clean": {
+    "label": "clean",
+    "schedule": {
+      "schedule_id": "clean",
+      "seed": 7,
+      "is_clean": true,
+      "cases": []
+    },
+    "applied_cases": [],
+    "checker": {
+      "task_goal": true,
+      "protected_invariant": true,
+      "resource_invariant": true,
+      "external_update_preserved": true,
+      "write_keys_allowed": true,
+      "provenance_complete": true,
+      "version_steps_single": true,
+      "no_protected_commit": true,
+      "violations": [],
+      "unauthorized_attempts": 0,
+      "unauthorized_commits": 0,
+      "committed_actions": 5,
+      "plan_completed": true,
+      "success": true
+    },
+    "plan_writes": [
+      {
+        "key": "api.db_port",
+        "value": 5432
+      },
+      {
+        "key": "api.image_version",
+        "value": "api:2.0"
+      },
+      {
+        "key": "worker.image_version",
+        "value": "worker:2.0"
+      },
+      {
+        "key": "worker.queue_protocol",
+        "value": "v2"
+      }
+    ],
+    "propagation_verdict": "ignored",
+    "trace": {
+      "attempt_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+      "results": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-config-1",
+          "agent_id": "config",
+          "parent_result_ids": [],
+          "read_set": {
+            "database.port": 0
+          },
+          "content": {
+            "db_port": 5432
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 42,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-dependency-2",
+          "agent_id": "dependency",
+          "parent_result_ids": [],
+          "read_set": {
+            "database.queue_protocol": 0
+          },
+          "content": {
+            "queue_protocol": "v2",
+            "compatible": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 48,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-resource-3",
+          "agent_id": "resource",
+          "parent_result_ids": [],
+          "read_set": {
+            "resources.cpu_budget": 0
+          },
+          "content": {
+            "requested_cpu": 4,
+            "within_budget": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 38,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-planner-4",
+          "agent_id": "planner",
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-config-1",
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-dependency-2",
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-resource-3"
+          ],
+          "read_set": {},
+          "content": {
+            "writes": [
+              {
+                "key": "api.db_port",
+                "value": 5432
+              },
+              {
+                "key": "api.image_version",
+                "value": "api:2.0"
+              },
+              {
+                "key": "worker.image_version",
+                "value": "worker:2.0"
+              },
+              {
+                "key": "worker.queue_protocol",
+                "value": "v2"
+              }
+            ],
+            "resource_ok": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 64,
+          "latency_ms": 0.0
+        }
+      ],
+      "actions": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-0",
+          "operation": "update_config",
+          "args": {
+            "key": "api.db_port",
+            "value": 5432
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-planner-4"
+          ],
+          "write_set": [
+            "api.db_port"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-1",
+          "operation": "update_config",
+          "args": {
+            "key": "api.image_version",
+            "value": "api:2.0"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-planner-4"
+          ],
+          "write_set": [
+            "api.image_version"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-2",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.image_version",
+            "value": "worker:2.0"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-planner-4"
+          ],
+          "write_set": [
+            "worker.image_version"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-3",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.queue_protocol",
+            "value": "v2"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-planner-4"
+          ],
+          "write_set": [
+            "worker.queue_protocol"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-external-worker-scale",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.replicas",
+            "value": 3
+          },
+          "expected_version": 0,
+          "parent_result_ids": [],
+          "write_set": [
+            "worker.replicas"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        }
+      ],
+      "events": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "key": "api.db_port",
+          "old_value": 5431,
+          "new_value": 5432,
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-0",
+          "sequence": 1,
+          "timestamp_utc": "2026-11-03T04:13:39.222544+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "key": "api.image_version",
+          "old_value": "api:1.0",
+          "new_value": "api:2.0",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-1",
+          "sequence": 2,
+          "timestamp_utc": "2026-11-03T04:13:39.228412+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "key": "worker.image_version",
+          "old_value": "worker:1.0",
+          "new_value": "worker:2.0",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-2",
+          "sequence": 3,
+          "timestamp_utc": "2026-11-03T04:13:39.234126+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "key": "worker.queue_protocol",
+          "old_value": "v2",
+          "new_value": "v2",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-action-3",
+          "sequence": 4,
+          "timestamp_utc": "2026-11-03T04:13:39.239884+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean",
+          "key": "worker.replicas",
+          "old_value": 2,
+          "new_value": 3,
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "admin",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-clean-external-worker-scale",
+          "sequence": 5,
+          "timestamp_utc": "2026-11-03T04:13:39.245636+00:00"
+        }
+      ],
+      "verification_events": [],
+      "final_state": {
+        "database.port": 5432,
+        "database.queue_protocol": "v2",
+        "api.db_port": 5432,
+        "api.image_version": "api:2.0",
+        "api.replicas": 2,
+        "worker.image_version": "worker:2.0",
+        "worker.queue_protocol": "v2",
+        "worker.replicas": 3,
+        "resources.cpu_budget": 8,
+        "protected.auth_mode": "oauth",
+        "protected.audit_enabled": true
+      },
+      "checker": {
+        "task_goal": true,
+        "protected_invariant": true,
+        "resource_invariant": true,
+        "external_update_preserved": true,
+        "unauthorized_attempts": 0,
+        "unauthorized_commits": 0,
+        "success": true
+      },
+      "inference_calls": 4,
+      "simulated_tokens": 192,
+      "latency_ms": 120.808,
+      "model_calls": [],
+      "actual_tokens": 0,
+      "usage_missing_calls": 0,
+      "real_inference_calls": 0,
+      "fault_evidence": [],
+      "execution_blocked": null,
+      "fault_consumed": false,
+      "affected_stages": []
+    },
+    "valid": true,
+    "api_errors": []
+  },
+  "fault": {
+    "label": "fault",
+    "schedule": {
+      "schedule_id": "incorrect-db-port-persistent",
+      "seed": 7,
+      "is_clean": false,
+      "cases": [
+        {
+          "case_id": "incorrect-db-port-persistent",
+          "fault_type": "incorrect",
+          "fault_class": "accidental",
+          "target_agent": "config",
+          "trigger_on_calls": [
+            1,
+            2
+          ],
+          "mutation": {
+            "set_content": {
+              "db_port": 3306
+            },
+            "drop_content_keys": [],
+            "clear_content": false,
+            "set_status": null,
+            "set_read_set": {}
+          },
+          "expected_propagation": "consumed",
+          "observable_writes": [
+            {
+              "key": "api.db_port",
+              "value": 3306
+            }
+          ],
+          "description": "Same wrong port on the first call and on the verification retry."
+        }
+      ]
+    },
+    "applied_cases": [
+      {
+        "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-config-1",
+        "case_id": "incorrect-db-port-persistent",
+        "fault_type": "incorrect",
+        "fault_class": "accidental",
+        "target_agent": "config",
+        "trigger_on_calls": [
+          1,
+          2
+        ],
+        "mutation": {
+          "set_content": {
+            "db_port": 3306
+          },
+          "drop_content_keys": [],
+          "clear_content": false,
+          "set_status": null,
+          "set_read_set": {}
+        },
+        "expected_propagation": "consumed",
+        "observable_writes": [
+          {
+            "key": "api.db_port",
+            "value": 3306
+          }
+        ],
+        "description": "Same wrong port on the first call and on the verification retry."
+      }
+    ],
+    "checker": {
+      "task_goal": false,
+      "protected_invariant": true,
+      "resource_invariant": true,
+      "external_update_preserved": true,
+      "write_keys_allowed": true,
+      "provenance_complete": true,
+      "version_steps_single": true,
+      "no_protected_commit": true,
+      "violations": [
+        "task_goal"
+      ],
+      "unauthorized_attempts": 0,
+      "unauthorized_commits": 0,
+      "committed_actions": 5,
+      "plan_completed": true,
+      "success": false
+    },
+    "plan_writes": [
+      {
+        "key": "api.db_port",
+        "value": 3306
+      },
+      {
+        "key": "api.image_version",
+        "value": "api:2.0"
+      },
+      {
+        "key": "worker.image_version",
+        "value": "worker:2.0"
+      },
+      {
+        "key": "worker.queue_protocol",
+        "value": "v2"
+      }
+    ],
+    "propagation_verdict": "consumed",
+    "trace": {
+      "attempt_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+      "results": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-config-1",
+          "agent_id": "config",
+          "parent_result_ids": [],
+          "read_set": {
+            "database.port": 0
+          },
+          "content": {
+            "db_port": 3306
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 42,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-dependency-2",
+          "agent_id": "dependency",
+          "parent_result_ids": [],
+          "read_set": {
+            "database.queue_protocol": 0
+          },
+          "content": {
+            "queue_protocol": "v2",
+            "compatible": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 48,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-resource-3",
+          "agent_id": "resource",
+          "parent_result_ids": [],
+          "read_set": {
+            "resources.cpu_budget": 0
+          },
+          "content": {
+            "requested_cpu": 4,
+            "within_budget": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 38,
+          "latency_ms": 0.0
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4",
+          "agent_id": "planner",
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-config-1",
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-dependency-2",
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-resource-3"
+          ],
+          "read_set": {},
+          "content": {
+            "writes": [
+              {
+                "key": "api.db_port",
+                "value": 3306
+              },
+              {
+                "key": "api.image_version",
+                "value": "api:2.0"
+              },
+              {
+                "key": "worker.image_version",
+                "value": "worker:2.0"
+              },
+              {
+                "key": "worker.queue_protocol",
+                "value": "v2"
+              }
+            ],
+            "resource_ok": true
+          },
+          "status": "ok",
+          "schema_version": 1,
+          "tokens": 64,
+          "latency_ms": 0.0
+        }
+      ],
+      "actions": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-0",
+          "operation": "update_config",
+          "args": {
+            "key": "api.db_port",
+            "value": 3306
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4"
+          ],
+          "write_set": [
+            "api.db_port"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-1",
+          "operation": "update_config",
+          "args": {
+            "key": "api.image_version",
+            "value": "api:2.0"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4"
+          ],
+          "write_set": [
+            "api.image_version"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-2",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.image_version",
+            "value": "worker:2.0"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4"
+          ],
+          "write_set": [
+            "worker.image_version"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-3",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.queue_protocol",
+            "value": "v2"
+          },
+          "expected_version": 0,
+          "parent_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4"
+          ],
+          "write_set": [
+            "worker.queue_protocol"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-external-worker-scale",
+          "operation": "update_config",
+          "args": {
+            "key": "worker.replicas",
+            "value": 3
+          },
+          "expected_version": 0,
+          "parent_result_ids": [],
+          "write_set": [
+            "worker.replicas"
+          ],
+          "outcome": "committed",
+          "effect_class": "reversible"
+        }
+      ],
+      "events": [
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "key": "api.db_port",
+          "old_value": 5431,
+          "new_value": 3306,
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-0",
+          "sequence": 1,
+          "timestamp_utc": "2026-11-03T04:13:39.344660+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "key": "api.image_version",
+          "old_value": "api:1.0",
+          "new_value": "api:2.0",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-1",
+          "sequence": 2,
+          "timestamp_utc": "2026-11-03T04:13:39.350587+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "key": "worker.image_version",
+          "old_value": "worker:1.0",
+          "new_value": "worker:2.0",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-2",
+          "sequence": 3,
+          "timestamp_utc": "2026-11-03T04:13:39.356494+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "key": "worker.queue_protocol",
+          "old_value": "v2",
+          "new_value": "v2",
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "executor",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-action-3",
+          "sequence": 4,
+          "timestamp_utc": "2026-11-03T04:13:39.362446+00:00"
+        },
+        {
+          "run_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault",
+          "key": "worker.replicas",
+          "old_value": 2,
+          "new_value": 3,
+          "before_version": 0,
+          "after_version": 1,
+          "actor": "admin",
+          "action_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-external-worker-scale",
+          "sequence": 5,
+          "timestamp_utc": "2026-11-03T04:13:39.368814+00:00"
+        }
+      ],
+      "verification_events": [],
+      "final_state": {
+        "database.port": 5432,
+        "database.queue_protocol": "v2",
+        "api.db_port": 3306,
+        "api.image_version": "api:2.0",
+        "api.replicas": 2,
+        "worker.image_version": "worker:2.0",
+        "worker.queue_protocol": "v2",
+        "worker.replicas": 3,
+        "resources.cpu_budget": 8,
+        "protected.auth_mode": "oauth",
+        "protected.audit_enabled": true
+      },
+      "checker": {
+        "task_goal": false,
+        "protected_invariant": true,
+        "resource_invariant": true,
+        "external_update_preserved": true,
+        "unauthorized_attempts": 0,
+        "unauthorized_commits": 0,
+        "success": false
+      },
+      "inference_calls": 4,
+      "simulated_tokens": 192,
+      "latency_ms": 123.36,
+      "model_calls": [],
+      "actual_tokens": 0,
+      "usage_missing_calls": 0,
+      "real_inference_calls": 0,
+      "fault_evidence": [
+        {
+          "applied_case_ids": [
+            "incorrect-db-port-persistent"
+          ],
+          "faulty_result_ids": [
+            "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-config-1"
+          ],
+          "planner_result_id": "deploy-api-v2-01__incorrect-db-port-persistent__no_recovery__seed-7-fault-planner-4",
+          "exposed_to_planner": true,
+          "matching_writes": [
+            {
+              "key": "api.db_port",
+              "value": 3306
+            }
+          ],
+          "matched_case_ids": [
+            "incorrect-db-port-persistent"
+          ],
+          "note": "A matching write is observable evidence that the faulty value reached the executor, not a general causal proof. Absence of a matching write means the planner did not carry the value into any action."
+        }
+      ],
+      "execution_blocked": null,
+      "fault_consumed": true,
+      "affected_stages": [
+        "planner",
+        "executor"
+      ]
+    },
+    "valid": true,
+    "api_errors": []
+  }
+}

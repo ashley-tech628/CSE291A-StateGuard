@@ -193,3 +193,118 @@ def test_schedule_with_two_cases_applies_both(tmp_path):
     )
     assert len(outcome.applied_cases) == 2
     assert outcome.verdict == "consumed"
+
+
+# --- Refusal is not the same as being ignored -------------------------------
+
+
+class DecliningPlanner:
+    """Agents answer correctly; the planner declines when told it is incompatible.
+
+    This is what a real model does with the prompt's permission to return an
+    empty write list, and it is the behaviour the 'ignored' verdict used to
+    swallow.
+    """
+
+    model = "fake-declining-planner"
+
+    def generate_json(self, prompt, inputs):
+        if "listening port" in prompt:
+            output = {"db_port": inputs["database"]["port"]}
+        elif "Dependency Agent" in prompt:
+            protocol = inputs["database"]["queue_protocol"]
+            output = {"queue_protocol": protocol, "compatible": protocol == "v2"}
+        elif "Resource Agent" in prompt:
+            total = inputs["requested_api_replicas"] + inputs["requested_worker_replicas"]
+            output = {"requested_cpu": total, "within_budget": total <= inputs["cpu_budget"]}
+        else:
+            analysis, target = inputs["analysis"], inputs["deployment_target"]
+            if not analysis["dependency"]["content"].get("compatible", True):
+                output = {"writes": [], "resource_ok": True}
+            else:
+                output = {
+                    "writes": [
+                        {"key": "api.db_port", "value": analysis["config"]["content"]["db_port"]},
+                        {"key": "api.image_version", "value": target["api_image"]},
+                        {"key": "worker.image_version", "value": target["worker_image"]},
+                        {"key": "worker.queue_protocol",
+                         "value": analysis["dependency"]["content"]["queue_protocol"]},
+                    ],
+                    "resource_ok": analysis["resource"]["content"]["within_budget"],
+                }
+        return {"model": self.model, "messages": [], "parsed": output,
+                "raw_response": "", "error": None, "status": "ok",
+                "usage": {"total_tokens": 10}, "latency_ms": 1}
+
+
+def test_planner_declining_to_deploy_is_refused_not_ignored(tmp_path):
+    result = run_paired(
+        task=TASK, case=get_case("ignored-dependency-compat-flag"),
+        policy="no_recovery", seed=7, workdir=tmp_path / "declined",
+        model_adapter=DecliningPlanner(),
+    )
+    assert result.clean.check.success, "the control must still deploy"
+    assert result.fault.verdict == "refused"
+    assert not result.comparison["fault_consumed"]
+    assert not result.comparison["plan_writes_identical"]
+    # Refusal changed behaviour, so it must not be certified as a control case.
+    assert not result.comparison["ignored_without_propagation"]
+    assert result.comparison["pair_valid"]
+
+
+def test_refusal_is_distinguished_from_being_blocked(tmp_path):
+    result = run_paired(
+        task=TASK, case=get_case("timeout-config-agent"),
+        policy="no_recovery", seed=7, workdir=tmp_path / "blocked",
+        model_adapter=DecliningPlanner(),
+    )
+    assert result.fault.verdict == "blocked"
+
+
+# --- Provider failures invalidate a pair ------------------------------------
+
+
+class BrokenAdapter:
+    model = "fake-broken"
+
+    def generate_json(self, prompt, inputs):
+        raise RuntimeError("provider unreachable")
+
+
+def test_provider_failure_marks_the_pair_invalid(tmp_path):
+    result = run_paired(
+        task=TASK, case=get_case("incorrect-db-port-3306"),
+        policy="no_recovery", seed=7, workdir=tmp_path / "broken",
+        model_adapter=BrokenAdapter(),
+    )
+    assert not result.clean.valid
+    assert result.clean.api_errors
+    assert not result.comparison["pair_valid"]
+    assert result.comparison["invalid_reason"] == "api_errors_in_clean_run"
+    assert result.comparison["api_errors_clean"] >= 1
+
+
+def test_deterministic_runs_are_always_valid(tmp_path):
+    result = pair(tmp_path, "incorrect-db-port-3306")
+    assert result.clean.valid and result.fault.valid
+    assert result.comparison["pair_valid"]
+    assert result.comparison["invalid_reason"] is None
+
+
+def test_schema_failures_are_model_behaviour_not_infrastructure(tmp_path):
+    """A badly shaped answer must not be excused as a provider outage."""
+
+    class BadSchema(DecliningPlanner):
+        def generate_json(self, prompt, inputs):
+            call = super().generate_json(prompt, inputs)
+            if "listening port" in prompt:
+                call["parsed"] = {"unexpected": "field"}
+            return call
+
+    result = run_paired(
+        task=TASK, case=get_case("incorrect-db-port-3306"),
+        policy="no_recovery", seed=7, workdir=tmp_path / "schema",
+        model_adapter=BadSchema(),
+    )
+    assert result.clean.valid, "a schema error is not an infrastructure error"
+    assert result.comparison["invalid_reason"] == "clean_control_failed"
