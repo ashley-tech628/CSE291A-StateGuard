@@ -16,7 +16,7 @@ and verify the page count. No individual contribution statement is included.
 
 ## Compile
 
-Upload `main.tex` and `figures/overview.pdf` together to Overleaf, or run:
+Upload `main.tex` and `figures/propagation-cost.pdf` together to Overleaf, or run:
 
 ```sh
 pdflatex main.tex
@@ -29,7 +29,7 @@ booktabs, hyperref, and caption. The bibliography is inline and needs no BibTeX.
 
 The figure is vector PDF. To rebuild it from the repository root, install the
 evaluation dependencies and run `python paper/phase1/build_figure.py`.
-It reads `results/c-phase1-llm-matched-summary.json`; the matched experiment source
+It validates manifests and reads the nine baseline summaries via the common-valid-pair gate; the matched experiment source
 is revision `6930ac8`. All result values are descriptive measurements on one
 deployment task, not significance claims across deployment workloads.
 
@@ -42,3 +42,10 @@ deployment task, not significance claims across deployment workloads.
   repository, and the A2ASecBench project page.
 - The original proposal's broader task/topology and ablation goals remain
   Phase 2 work; they are not claimed as completed experiments.
+
+## Figure and scope
+
+The report includes the three-panel propagation, token-cost, and latency figure
+as a full-width vector graphic, reformatted for readable two-column printing.
+The outcome table preserves completion, unauthorized commits, calls, and
+recomputation counts. See `COVERAGE.md` for proposal-to-report coverage.

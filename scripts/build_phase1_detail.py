@@ -116,13 +116,13 @@ def plot_case_success(rows: list[dict], order: list[str], path: Path) -> None:
         plt.close(fig)
 
 
-def plot_propagation_and_cost(rows: list[dict], path: Path) -> None:
+def plot_propagation_and_cost(rows: list[dict], path: Path, *, compact: bool = False) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.patches import Patch
 
     with plt.rc_context(_paper_style()):
-        fig, axes = plt.subplots(1, 3, figsize=(11.8, 3.65),
+        fig, axes = plt.subplots(1, 3, figsize=(7, 2.2) if compact else (11.8, 3.65),
                                  gridspec_kw={"width_ratios": [1.27, 1, 1]})
         positions = [2, 1, 0]
         labels = [LABELS[p] for p in POLICIES]
@@ -172,7 +172,19 @@ def plot_propagation_and_cost(rows: list[dict], path: Path) -> None:
             axis.spines[["top", "right", "left"]].set_visible(False)
             axis.tick_params(axis="y", length=0, pad=4)
             axis.tick_params(axis="x", direction="out")
-        fig.subplots_adjust(left=.11, right=.99, top=.80, bottom=.24, wspace=.49)
+        if compact:
+            for axis in axes:
+                axis.title.set_fontsize(8)
+                axis.xaxis.label.set_fontsize(7.5)
+                axis.tick_params(labelsize=7)
+            for axis in axes[1:]:
+                axis.set_yticklabels([])
+            axes[0].set_xticks([0, 10, 20, 30])
+            axes[1].set_xticks([500, 1000, 1500])
+            axes[2].set_xticks([15, 25, 35, 45])
+            fig.subplots_adjust(left=.13, right=.99, top=.84, bottom=.30, wspace=.20)
+        else:
+            fig.subplots_adjust(left=.11, right=.99, top=.80, bottom=.24, wspace=.49)
         fig.legend(handles=[Patch(facecolor=verdict_colors[v], label=v.title())
                             for v in ("consumed", "ignored", "refused", "blocked")],
                    loc="lower left", bbox_to_anchor=(.105, .035), ncol=4,
