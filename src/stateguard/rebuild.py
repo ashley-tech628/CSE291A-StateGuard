@@ -8,6 +8,12 @@ the old runs do not have to be repeated. They are re-graded.
 Grading always uses the CURRENT case library and checker, so a rebuilt report
 reflects today's definitions applied to the data that was actually collected.
 
+Re-grading in place also refreshes the derived fields inside each
+``paired.json`` - the verdict, the checker result, the comparison - so the raw
+files and the report can never disagree. The recorded traces are never touched:
+what the run observed stays exactly as it was written. With ``--output`` the
+source files are left alone entirely.
+
     python -m stateguard.rebuild --input results/paired-llm-seed7
 """
 
@@ -74,6 +80,27 @@ def paired_files(run_dir: Path) -> list[Path]:
     return sorted(run_dir.glob("pairs/*/paired.json"))
 
 
+def _refresh_run(stored: dict[str, Any], outcome: RunOutcome) -> None:
+    stored["checker"] = outcome.check.as_dict()
+    stored["plan_writes"] = [dict(write) for write in outcome.plan_writes]
+    stored["propagation_verdict"] = outcome.verdict
+    stored["valid"] = outcome.valid
+    stored["api_errors"] = list(outcome.api_errors)
+
+
+def refresh_payload(payload: dict[str, Any], result: PairedResult) -> dict[str, Any]:
+    """Bring a saved pair's derived fields up to date, in place.
+
+    Only conclusions are rewritten. ``trace`` - the record of what the run
+    actually observed - is left exactly as it was written.
+    """
+    payload["comparison"] = result.comparison
+    payload["case"] = result.case.as_dict()
+    _refresh_run(payload["clean"], result.clean)
+    _refresh_run(payload["fault"], result.fault)
+    return payload
+
+
 def rebuild_run(
     run_dir: Path, outdir: Path | None = None, with_figures: bool = True
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, str]]]:
@@ -99,6 +126,11 @@ def rebuild_run(
                 "now": result.comparison["propagation_verdict"],
             })
         rows.append(paired_row(result))
+        if outdir is None:
+            path.write_text(
+                json.dumps(refresh_payload(payload, result), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
     target = outdir or run_dir
     target.mkdir(parents=True, exist_ok=True)
@@ -133,6 +165,10 @@ def main() -> None:
                       f"{change['was']} -> {change['now']}")
         else:
             print("  no verdict changed")
+        if args.output:
+            print("  source pair files left untouched")
+        else:
+            print(f"  refreshed {len(rows)} paired.json file(s); traces unchanged")
         print("  written to:", args.output or run_dir)
 
 

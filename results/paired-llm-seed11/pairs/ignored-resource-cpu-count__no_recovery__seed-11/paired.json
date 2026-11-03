@@ -66,6 +66,10 @@
   "policy": "no_recovery",
   "seed": 11,
   "comparison": {
+    "pair_valid": true,
+    "invalid_reason": null,
+    "api_errors_clean": 0,
+    "api_errors_fault": 0,
     "fault_exposed_to_planner": true,
     "fault_consumed": false,
     "matching_writes": [],
@@ -740,7 +744,9 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   },
   "fault": {
     "label": "fault",
@@ -1462,6 +1468,8 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   }
 }

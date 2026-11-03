@@ -72,6 +72,10 @@
   "policy": "no_recovery",
   "seed": 7,
   "comparison": {
+    "pair_valid": true,
+    "invalid_reason": null,
+    "api_errors_clean": 0,
+    "api_errors_fault": 0,
     "fault_exposed_to_planner": true,
     "fault_consumed": true,
     "matching_writes": [
@@ -756,7 +760,9 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   },
   "fault": {
     "label": "fault",
@@ -1502,6 +1508,8 @@
         "planner",
         "executor"
       ]
-    }
+    },
+    "valid": true,
+    "api_errors": []
   }
 }

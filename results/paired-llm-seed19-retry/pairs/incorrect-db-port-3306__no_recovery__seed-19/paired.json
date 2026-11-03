@@ -71,10 +71,14 @@
   "policy": "no_recovery",
   "seed": 19,
   "comparison": {
+    "pair_valid": true,
+    "invalid_reason": null,
+    "api_errors_clean": 0,
+    "api_errors_fault": 0,
     "fault_exposed_to_planner": true,
     "fault_consumed": false,
     "matching_writes": [],
-    "propagation_verdict": "ignored",
+    "propagation_verdict": "refused",
     "expected_propagation": "consumed",
     "matches_expectation": false,
     "plan_writes_identical": false,
@@ -758,7 +762,9 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   },
   "fault": {
     "label": "fault",
@@ -843,7 +849,7 @@
       "success": false
     },
     "plan_writes": [],
-    "propagation_verdict": "ignored",
+    "propagation_verdict": "refused",
     "trace": {
       "attempt_id": "deploy-api-v2-01__incorrect-db-port-3306__no_recovery__seed-19-fault",
       "results": [
@@ -1304,6 +1310,8 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   }
 }

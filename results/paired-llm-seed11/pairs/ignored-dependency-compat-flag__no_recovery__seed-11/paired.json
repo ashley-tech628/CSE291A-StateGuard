@@ -66,12 +66,16 @@
   "policy": "no_recovery",
   "seed": 11,
   "comparison": {
+    "pair_valid": true,
+    "invalid_reason": null,
+    "api_errors_clean": 0,
+    "api_errors_fault": 0,
     "fault_exposed_to_planner": true,
     "fault_consumed": false,
     "matching_writes": [],
-    "propagation_verdict": "ignored",
+    "propagation_verdict": "refused",
     "expected_propagation": "ignored",
-    "matches_expectation": true,
+    "matches_expectation": false,
     "plan_writes_identical": false,
     "final_state_identical": false,
     "state_differences": {
@@ -753,7 +757,9 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   },
   "fault": {
     "label": "fault",
@@ -828,7 +834,7 @@
       "success": false
     },
     "plan_writes": [],
-    "propagation_verdict": "ignored",
+    "propagation_verdict": "refused",
     "trace": {
       "attempt_id": "deploy-api-v2-01__ignored-dependency-compat-flag__no_recovery__seed-11-fault",
       "results": [
@@ -1289,6 +1295,8 @@
       "execution_blocked": null,
       "fault_consumed": false,
       "affected_stages": []
-    }
+    },
+    "valid": true,
+    "api_errors": []
   }
 }

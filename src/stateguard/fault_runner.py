@@ -14,7 +14,7 @@ looked like on the way in.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -155,7 +155,8 @@ class RunOutcome:
             "propagation_verdict": self.verdict,
             "valid": self.valid,
             "api_errors": list(self.api_errors),
-            "trace": asdict(self.trace),
+            # A re-graded outcome carries a trace loaded from disk, not a dataclass.
+            "trace": asdict(self.trace) if is_dataclass(self.trace) else vars(self.trace),
         }
 
 

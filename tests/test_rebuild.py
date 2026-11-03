@@ -101,3 +101,71 @@ def test_rebuild_applies_the_current_validity_rule(tmp_path, run_dir):
 def test_missing_pairs_directory_is_an_explicit_error(tmp_path):
     with pytest.raises(FileNotFoundError):
         rebuild_run(tmp_path)
+
+
+# --- Re-grading in place keeps the files and the report in agreement --------
+
+
+def test_in_place_rebuild_refreshes_the_stored_verdict(run_dir):
+    root, _ = run_dir
+    path = next(p for p in paired_files(root) if "timeout" in str(p))
+    payload = load_pair(path)
+    payload["fault"]["propagation_verdict"] = "consumed"
+    payload["comparison"]["propagation_verdict"] = "consumed"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    rebuild_run(root, with_figures=False)
+
+    refreshed = load_pair(path)
+    assert refreshed["fault"]["propagation_verdict"] == "blocked"
+    assert refreshed["comparison"]["propagation_verdict"] == "blocked"
+    assert refreshed["comparison"]["pair_valid"] is True
+
+
+def test_in_place_rebuild_never_edits_a_trace(run_dir):
+    root, _ = run_dir
+    path = paired_files(root)[0]
+    before = {label: json.dumps(load_pair(path)[label]["trace"], sort_keys=True)
+              for label in ("clean", "fault")}
+
+    rebuild_run(root, with_figures=False)
+
+    after = {label: json.dumps(load_pair(path)[label]["trace"], sort_keys=True)
+             for label in ("clean", "fault")}
+    assert after == before
+
+
+def test_rebuild_to_an_output_directory_leaves_the_source_alone(tmp_path, run_dir):
+    root, _ = run_dir
+    path = paired_files(root)[0]
+    payload = load_pair(path)
+    payload["fault"]["propagation_verdict"] = "tampered"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    try:
+        rebuild_run(root, outdir=tmp_path, with_figures=False)
+        assert load_pair(path)["fault"]["propagation_verdict"] == "tampered"
+    finally:
+        rebuild_run(root, with_figures=False)
+
+
+def test_stored_checker_result_is_refreshed_too(run_dir):
+    root, _ = run_dir
+    path = next(p for p in paired_files(root) if "incorrect" in str(p))
+    payload = load_pair(path)
+    payload["fault"]["checker"] = {"success": True}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    rebuild_run(root, with_figures=False)
+
+    checker = load_pair(path)["fault"]["checker"]
+    assert checker["success"] is False
+    assert "task_goal" in checker["violations"]
+
+
+def test_a_rebuilt_outcome_can_still_be_serialised(run_dir):
+    """as_dict must work on an outcome whose trace came from a file."""
+    root, _ = run_dir
+    result = rebuild_pair(load_pair(paired_files(root)[0]))
+    payload = result.fault.as_dict()
+    assert payload["trace"]["results"]
+    assert json.dumps(payload)
