@@ -156,6 +156,7 @@ def _rate(hits: int, total: int) -> float | None:
 
 def _group_stats(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     total = len(rows)
+    scheduled_expectations = [r for r in rows if r["policy"] == "no_recovery"]
     return {
         "pairs": total,
         "clean_success_rate": _rate(sum(bool(r["clean_success"]) for r in rows), total),
@@ -166,7 +167,8 @@ def _group_stats(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "refused": sum(r["propagation_verdict"] == "refused" for r in rows),
         "blocked": sum(r["propagation_verdict"] == "blocked" for r in rows),
         "expectation_match_rate": _rate(
-            sum(bool(r["matches_expectation"]) for r in rows), total
+            sum(bool(r["matches_expectation"]) for r in scheduled_expectations),
+            len(scheduled_expectations),
         ),
         "unauthorized_attempts": sum(int(r["unauthorized_attempts"]) for r in rows),
         "unauthorized_commits": sum(int(r["unauthorized_commits"]) for r in rows),
@@ -204,7 +206,7 @@ def build_report(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
             "observed": r["propagation_verdict"],
         }
         for r in valid
-        if not r["matches_expectation"]
+        if r["policy"] == "no_recovery" and not r["matches_expectation"]
     ]
     reasons: dict[str, int] = {}
     for row in invalid:
@@ -233,7 +235,9 @@ def build_report(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
             "fault_success_rate; adversarial faults on unauthorized_commits. "
             "'consumed' means a faulty value appeared in a plan write; 'refused' "
             "means the planner declined to deploy, which changes behaviour without "
-            "propagating a value; 'blocked' means the pipeline stopped earlier."
+            "propagating a value; 'blocked' means the pipeline stopped earlier. "
+            "Schedule expectation matches are evaluated only for no_recovery; "
+            "verification and restart intentionally change propagation."
         ),
     }
 

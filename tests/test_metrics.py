@@ -147,6 +147,13 @@ def test_invalid_pair_cannot_count_as_an_expectation_mismatch(rows):
     assert build_report(list(rows) + [bad])["expectation_mismatches"] == []
 
 
+def test_intervention_policy_does_not_count_as_schedule_mismatch(rows):
+    row = dict(rows[0], policy="always_verify", matches_expectation=False)
+    report = build_report([row])
+    assert report["expectation_mismatches"] == []
+    assert report["overall"]["expectation_match_rate"] is None
+
+
 def test_invalid_control_pair_is_not_counted_as_proven(rows):
     control = next(r for r in rows if r["expected_propagation"] == "ignored")
     others = [r for r in rows if r is not control]

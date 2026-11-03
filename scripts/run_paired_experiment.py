@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import platform
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -106,6 +108,8 @@ def main() -> None:
         "request_interval_seconds": args.request_interval if adapter else None,
         "temperature": args.temperature if adapter else None,
         "python_version": sys.version,
+        "host_platform": platform.platform(),
+        "source_commit": os.environ.get("STATEGUARD_REVISION"),
         "design": "paired clean/fault; the clean run is the control for each case",
         "external_updates": [asdict(update) for update in external_updates]
                             if external_updates is not None else None,
