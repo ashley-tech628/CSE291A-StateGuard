@@ -1,7 +1,7 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
 \usepackage[letterpaper,textwidth=7in,textheight=9in,centering]{geometry}
 \usepackage{newtxtext,newtxmath}
-\usepackage{graphicx,booktabs,amsmath,microtype,url}
+\usepackage{graphicx,booktabs,amsmath,microtype,url,array}
 \usepackage[colorlinks=true,urlcolor=blue,citecolor=black,linkcolor=black]{hyperref}
 \usepackage[font=small,labelfont=bf]{caption}
 \setlength{\columnsep}{0.25in}
@@ -99,32 +99,34 @@ This pilot covers one task/topology and constrained tools. Detection, tracking o
 Ablations remove field-level reads, version checks, and action deduplication. Checkers and replay oracles will assess invalidation precision/recall, stale reuse, retained work, preserved updates, and blocked outcomes. Cost analysis includes tokens, recomputation, latency, and tracking overhead.
 
 \clearpage
-\section*{Appendix: Project milestones and reproducibility}
-\textbf{Milestone schedule.}
-\textbf{Nov. 3--4:} freeze Phase 1 artifacts.
-\textbf{Nov. 5--15:} expand topologies/events and validate oracles.
-\textbf{Nov. 16--25:} run selective-recovery comparisons and ablations.
-\textbf{Nov. 26--Dec. 4:} analyze overhead and failure boundaries.
-\textbf{Dec. 5--10:} reproduce results and finalize the report.
+\section*{Appendix: Milestones and reproducibility}
+\vspace{-0.5em}
+\begin{table}[h]
+\centering\small
+\caption{Remaining project milestones. Dates are in 2026.}
+\begin{tabular}{@{}p{.94in}>{\raggedright\arraybackslash}p{2.15in}@{}}\toprule
+When & Deliverable and acceptance check\\\midrule
+Nov. 3--4 & Freeze code, traces, and matched results.\\\addlinespace[2pt]
+Nov. 5--15 & Add three graph topologies; validate event replay.\\\addlinespace[2pt]
+Nov. 16--25 & Compare two replay methods under matched faults.\\\addlinespace[2pt]
+\mbox{Nov. 26--Dec. 4} & Measure overhead, stale reuse, and conflicts.\\\addlinespace[2pt]
+Dec. 5--10 & Reproduce figures; submit code and report.\\\bottomrule
+\end{tabular}
+\label{tab:milestones}
+\end{table}
 
-\paragraph{Reproduction and inspection.}
-The repository stores the workload fingerprint, fault schedule, source revision, model ID, retry and pacing settings, per-pair validity, final checker verdict, and prompt/response trace. Rebuild the matched CSV and both paper figures using the analysis scripts. The case-success heatmap reports per-case successes and denominators, exposing systematic failures masked by aggregate rates. The 156-test suite checks runtime invariants separately from the real-model pilot.
+\paragraph{Reproducibility and evidence boundary.}
+The repository provides workload fingerprints, fault schedules, source revision, model and retry settings, per-pair validity, checker outcomes, and paired traces. Its analysis scripts regenerate matched results and case-level figures. The 156-test suite checks runtime semantics separately from the LLM pilot. The real-model matrix measures NR, FR, and AV; selective replay, automatic detection, tracking overhead, and arbitrary remote effects remain outside its evidence.
 
-\paragraph{Boundary of current evidence.}
-The recorded real-model matrix compares NR, FR, and AV. It does not measure selective replay, a dependency-only comparator, model-to-model robustness, precision of automatic detection, or recovery of effects outside controlled tools. A second model, additional topologies, and isolated instrumentation measurements remain future work; a single task cannot support population-level significance claims.
-
-\paragraph{Planned evaluation matrix.}
-The next benchmark varies dependency structure and the timing and target of external writes while holding the fault identity constant across policies. Chain cases measure how far an invalid result flows; fan-out cases test retention of independent branches; diamond cases test whether reconverging branches reuse stale shared assumptions. For each topology, an administrator may write no field, an unrelated field, or the field the recovery would modify. We will compare the final state with an executable oracle that replays legal external events. Equal final goals are insufficient if an intervening legitimate update was lost.
-
-\paragraph{Recovery decision audit.}
-A representative record should include the faulty result ID, transitive invalidation set, candidate results accepted or rejected for reuse, current field versions, conflicting tool actions, replayed external events, final checker verdict, and residual effects. This audit separates the work saved by selective replay from work merely skipped because an injected message was never consumed. We will report blocked recoveries alongside completed ones and include failed clean controls in the experiment accounting.
-
-\paragraph{Related work and artifacts.}
-AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} motivate joint utility and security evaluation. Our \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository} supplies code, manifests, paired traces, and case/cost figures for known-fault recovery.
-\vspace{-0.4em}
-\begin{thebibliography}{3}\setlength{\itemsep}{0pt}\small
+\paragraph{Related work.}
+AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} motivate measuring both task completion and adversarial behavior. RDDs~\cite{rdd} show how lineage can guide recomputation, while Falkirk Wheel~\cite{falkirk} studies selective rollback in dataflows. Sagas~\cite{sagas} motivate explicit treatment of effects that cannot be undone by restoring local state. Our contribution targets agent outputs tied to versioned, mutable tool state. Code, manifests, traces, and plots are available in the \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository}.
+\vspace{-0.5em}
+\begin{thebibliography}{6}\setlength{\itemsep}{0pt}\small
 \bibitem{agentdojo} E. Debenedetti et al. AgentDojo: A dynamic environment to evaluate prompt injection attacks and defenses for LLM agents. \emph{arXiv:2406.13352}, 2024.
-\bibitem{tamas} Microsoft. TAMAS. \url{https://github.com/microsoft/TAMAS}.
+\bibitem{tamas} I. Kavathekar et al. TAMAS: Benchmarking adversarial risks in multi-agent LLM systems. \emph{ACL}, 2026.
 \bibitem{a2a} T. Li et al. A2ASecBench: A protocol-aware security benchmark for agent-to-agent multi-agent systems. \emph{ICLR}, 2026.
+\bibitem{rdd} M. Zaharia et al. Resilient distributed datasets: A fault-tolerant abstraction for in-memory cluster computing. \emph{NSDI}, 2012.
+\bibitem{falkirk} M. Isard and M. Abadi. Falkirk Wheel: Rollback recovery for dataflow systems. \emph{arXiv:1503.08877}, 2015.
+\bibitem{sagas} H. Garcia-Molina and K. Salem. Sagas. \emph{SIGMOD}, 1987.
 \end{thebibliography}
 \end{document}

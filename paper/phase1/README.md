@@ -36,8 +36,7 @@ deployment task, not significance claims across deployment workloads.
 - Integrated code: 156 tests pass.
 - Final PDF: three letter-sized pages (two main-text pages plus appendix/references); all pages visually checked.
 - No overfull text boxes in the final TeX log.
-- Citation metadata checked against AgentDojo's arXiv page, Microsoft's TAMAS
-  repository, and the A2ASecBench project page.
+- Six references checked against primary publisher, author, and repository pages.
 - The original proposal's broader task/topology and ablation goals remain
   Phase 2 work; they are not claimed as completed experiments.
 
