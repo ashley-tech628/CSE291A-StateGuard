@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import io
 from pathlib import Path
 
 from summarize_matched_phase1 import DIRECTORY_LABELS, POLICIES, summarize
@@ -23,8 +24,21 @@ FIELDS = (
 )
 LABELS = {"no_recovery": "No recovery", "full_restart": "Full restart",
           "always_verify": "Always verify"}
-COLORS = {"no_recovery": "#d95f02", "full_restart": "#1b9e77",
-          "always_verify": "#7570b3"}
+COLORS = {"no_recovery": "#54708A", "full_restart": "#148473",
+          "always_verify": "#8B6B9C"}
+SHORT_CASES = {
+    "incorrect-db-port-3306": "DB port · 3306",
+    "incorrect-db-port-unreachable": "DB port · unreachable",
+    "incorrect-db-port-persistent": "DB port · persistent",
+    "stale-protocol-superseded-doc": "Protocol · superseded guide",
+    "stale-protocol-unknown-version": "Protocol · unknown version",
+    "timeout-config-agent": "Config Agent · timeout",
+    "timeout-resource-agent": "Resource Agent · timeout",
+    "adversarial-disable-auth": "Injection · disable auth",
+    "adversarial-disable-audit": "Injection · disable audit",
+    "ignored-resource-cpu-count": "Control · CPU count",
+    "ignored-dependency-compat-flag": "Control · compatibility flag",
+}
 
 
 def matched_rows(root: Path, seeds: list[int]) -> tuple[dict, list[dict], list[str]]:
@@ -48,76 +62,139 @@ def matched_rows(root: Path, seeds: list[int]) -> tuple[dict, list[dict], list[s
 
 
 def write_detail(rows: list[dict], path: Path) -> None:
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    handle = io.StringIO(newline="")
+    writer = csv.DictWriter(handle, fieldnames=FIELDS)
+    writer.writeheader()
+    writer.writerows(rows)
+    content = handle.getvalue()
+    existing = None
+    if path.exists():
+        with path.open("r", encoding="utf-8", newline="") as current:
+            existing = current.read()
+    if existing != content:
+        path.write_text(content, encoding="utf-8", newline="")
 
 
 def plot_case_success(rows: list[dict], order: list[str], path: Path) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
+    from matplotlib.colors import ListedColormap
 
-    fig, ax = plt.subplots(figsize=(11.6, 7.1), constrained_layout=True)
-    values = np.zeros((len(order), len(POLICIES)))
-    labels = []
-    for i, case in enumerate(order):
-        case_rows = [row for row in rows if row["case_id"] == case]
-        kind = "ADV" if case_rows[0]["fault_class"] == "adversarial" else "ACC"
-        labels.append(f"{kind}  {case}")
-        for j, policy in enumerate(POLICIES):
-            group = [row for row in case_rows if row["policy"] == policy]
-            successes = sum(row["fault_success"] == "True" for row in group)
-            values[i, j] = successes / len(group)
-            ax.text(j, i, f"{successes}/{len(group)}", ha="center", va="center",
-                    fontsize=10, fontweight="bold")
-    image = ax.imshow(values, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
-    ax.set_xticks(range(len(POLICIES)), [LABELS[p] for p in POLICIES])
-    ax.set_yticks(range(len(order)), labels)
-    ax.set_title("Task success by fault case on the common valid seed set")
-    ax.tick_params(length=0)
-    fig.colorbar(image, ax=ax, label="Task success rate", fraction=0.035, pad=0.025)
-    fig.savefig(path, dpi=190, bbox_inches="tight")
-    plt.close(fig)
+    with plt.rc_context(_paper_style()):
+        fig, ax = plt.subplots(figsize=(7.2, 4.9))
+        values = np.zeros((len(order), len(POLICIES)))
+        counts = {}
+        for i, case in enumerate(order):
+            for j, policy in enumerate(POLICIES):
+                group = [row for row in rows if row["case_id"] == case
+                         and row["policy"] == policy]
+                successes = sum(row["fault_success"] == "True" for row in group)
+                values[i, j] = successes / len(group)
+                counts[i, j] = f"{successes}/{len(group)}"
+        ax.imshow(values, cmap=ListedColormap(["#EDF0F2", "#18758A"]),
+                  vmin=0, vmax=1, aspect="auto", interpolation="nearest")
+        for (i, j), count in counts.items():
+            ax.text(j, i, count, ha="center", va="center", fontsize=8,
+                    weight="bold", color="white" if values[i, j] > .5 else "#273540")
+        ax.set_xticks(range(len(POLICIES)), [LABELS[p] for p in POLICIES])
+        ax.xaxis.tick_top()
+        ax.set_yticks(range(len(order)), [SHORT_CASES.get(case, case) for case in order])
+        ax.tick_params(length=0, pad=5)
+        ax.set_xticks(np.arange(-.5, len(POLICIES), 1), minor=True)
+        ax.set_yticks(np.arange(-.5, len(order), 1), minor=True)
+        ax.grid(which="minor", color="white", linewidth=1.5)
+        ax.tick_params(which="minor", bottom=False, left=False)
+        for boundary in (6.5, 8.5):
+            if boundary < len(order) - .5:
+                ax.axhline(boundary, color="#586774", linewidth=1.1)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        fig.subplots_adjust(left=.34, right=.98, top=.88, bottom=.12)
+        fig.text(.34, .035, "Cells show completed tasks / common valid seeds; denominators reflect exclusions.",
+                 fontsize=7, color="#4B5965")
+        _save_figure(fig, path)
+        plt.close(fig)
 
 
 def plot_propagation_and_cost(rows: list[dict], path: Path) -> None:
     import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.patches import Patch
 
-    fig, axes = plt.subplots(1, 3, figsize=(13.8, 4.4), constrained_layout=True)
-    labels = [LABELS[p] for p in POLICIES]
-    bottom = [0] * len(POLICIES)
-    verdict_colors = {"consumed": "#d73027", "ignored": "#91bfdb",
-                      "refused": "#fdae61", "blocked": "#777777"}
-    for verdict in ("consumed", "ignored", "refused", "blocked"):
-        counts = [sum(row["policy"] == policy and row["propagation_verdict"] == verdict
-                      for row in rows) for policy in POLICIES]
-        axes[0].bar(labels, counts, bottom=bottom, label=verdict,
-                    color=verdict_colors[verdict])
-        bottom = [a + b for a, b in zip(bottom, counts)]
-    axes[0].set_title("Propagation verdicts")
-    axes[0].set_ylabel("Matched fault runs")
-    axes[0].legend(frameon=False, fontsize=8)
+    with plt.rc_context(_paper_style()):
+        fig, axes = plt.subplots(1, 3, figsize=(11.8, 3.65),
+                                 gridspec_kw={"width_ratios": [1.27, 1, 1]})
+        positions = [2, 1, 0]
+        labels = [LABELS[p] for p in POLICIES]
+        left = [0] * len(POLICIES)
+        verdict_colors = {"consumed": "#C05A46", "ignored": "#4E79A7",
+                          "refused": "#E3B35C", "blocked": "#91979D"}
+        for verdict in ("consumed", "ignored", "refused", "blocked"):
+            counts = [sum(row["policy"] == policy and row["propagation_verdict"] == verdict
+                          for row in rows) for policy in POLICIES]
+            axes[0].barh(positions, counts, left=left, height=.52,
+                         color=verdict_colors[verdict], edgecolor="white", linewidth=.5)
+            for y, count, start in zip(positions, counts, left):
+                if count:
+                    axes[0].text(start + count / 2, y, str(count), ha="center",
+                                 va="center", fontsize=7.5, weight="bold",
+                                 color="white" if verdict in ("consumed", "ignored") else "#26333C")
+            left = [a + b for a, b in zip(left, counts)]
+        axes[0].set_xlim(0, len(rows) // len(POLICIES))
+        axes[0].set_xlabel(f"Fault runs (n = {len(rows) // len(POLICIES)})")
+        axes[0].set_title("(a) Propagation", loc="left", pad=9, weight="bold")
 
-    for axis, field, title, scale in (
-        (axes[1], "actual_tokens_fault", "Actual tokens per fault run", 1),
-        (axes[2], "latency_ms_fault", "Fault latency (seconds)", 1000),
-    ):
-        groups = [[float(row[field]) / scale for row in rows if row["policy"] == p]
-                  for p in POLICIES]
-        boxes = axis.boxplot(groups, tick_labels=labels, patch_artist=True,
-                             showfliers=True, medianprops={"color": "black"})
-        for box, policy in zip(boxes["boxes"], POLICIES):
-            box.set_facecolor(COLORS[policy])
-            box.set_alpha(0.8)
-        axis.set_title(title)
-    for axis in axes:
-        axis.tick_params(axis="x", rotation=18)
-        axis.spines[["top", "right"]].set_visible(False)
-    fig.suptitle(f"Phase 1: propagation and cost ({len(rows) // len(POLICIES)} "
-                 "common valid cases per policy)")
-    fig.savefig(path, dpi=190, bbox_inches="tight")
-    plt.close(fig)
+        rng = np.random.default_rng(7)
+        for axis, field, title, scale in (
+            (axes[1], "actual_tokens_fault", "(b) Inference cost", 1),
+            (axes[2], "latency_ms_fault", "(c) End-to-end latency", 1000),
+        ):
+            groups = [[float(row[field]) / scale for row in rows if row["policy"] == p]
+                      for p in POLICIES]
+            boxes = axis.boxplot(groups, orientation="horizontal", positions=positions,
+                                 widths=.42, patch_artist=True, showfliers=False,
+                                 medianprops={"color": "#1E2A32", "linewidth": 1.1},
+                                 boxprops={"linewidth": .8, "edgecolor": "#4E79A7"},
+                                 whiskerprops={"color": "#65717B", "linewidth": .8},
+                                 capprops={"color": "#65717B", "linewidth": .8})
+            for box in boxes["boxes"]:
+                box.set_facecolor("#D7E3EB")
+            for y, group in zip(positions, groups):
+                axis.scatter(group, y + rng.uniform(-.12, .12, len(group)),
+                             s=9, color="#315D76", alpha=.38, linewidth=0, zorder=3)
+            axis.set_xlabel("Tokens" if scale == 1 else "Seconds")
+            axis.set_title(title, loc="left", pad=9, weight="bold")
+        for axis in axes:
+            axis.set_yticks(positions, labels)
+            axis.set_ylim(-.65, 2.65)
+            axis.grid(axis="x", color="#E1E5E8", linewidth=.55)
+            axis.set_axisbelow(True)
+            axis.spines[["top", "right", "left"]].set_visible(False)
+            axis.tick_params(axis="y", length=0, pad=4)
+            axis.tick_params(axis="x", direction="out")
+        fig.subplots_adjust(left=.11, right=.99, top=.80, bottom=.24, wspace=.49)
+        fig.legend(handles=[Patch(facecolor=verdict_colors[v], label=v.title())
+                            for v in ("consumed", "ignored", "refused", "blocked")],
+                   loc="lower left", bbox_to_anchor=(.105, .035), ncol=4,
+                   frameon=False, fontsize=7.5)
+        _save_figure(fig, path)
+        plt.close(fig)
+
+
+def _paper_style() -> dict:
+    return {
+        "font.family": "DejaVu Sans", "font.size": 8.2,
+        "axes.titlesize": 9, "axes.labelsize": 8,
+        "xtick.labelsize": 7.5, "ytick.labelsize": 7.5,
+        "axes.linewidth": .65, "xtick.major.width": .6,
+        "ytick.major.width": .6, "pdf.fonttype": 42,
+        "svg.fonttype": "none", "savefig.facecolor": "white",
+    }
+
+
+def _save_figure(fig, path: Path) -> None:
+    fig.savefig(path, dpi=320, bbox_inches="tight", pad_inches=.06)
+    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight", pad_inches=.06)
 
 
 def main() -> None:
@@ -128,14 +205,15 @@ def main() -> None:
     summary, rows, order = matched_rows(args.root, args.seeds)
     suffix = "" if args.seeds == [7, 11, 19] else "-seeds-" + "-".join(map(str, args.seeds))
     detail = args.root / f"c-phase1-llm{suffix}-detailed-cases.csv"
-    success = args.root / f"c-phase1-llm{suffix}-case-success.png"
-    cost = args.root / f"c-phase1-llm{suffix}-propagation-cost.png"
+    success = args.root / f"c-phase1-llm{suffix}-case-success-paper.png"
+    cost = args.root / f"c-phase1-llm{suffix}-propagation-cost-paper.png"
     write_detail(rows, detail)
     plot_case_success(rows, order, success)
     plot_propagation_and_cost(rows, cost)
     print(f"Matched case/seed combinations: {sum(map(len, summary['common_valid_cases_by_seed'].values()))}")
     print(f"Detailed rows: {len(rows)}")
-    print(f"Saved: {detail}, {success}, {cost}")
+    print(f"Saved: {detail}, {success}, {success.with_suffix('.pdf')}, "
+          f"{cost}, {cost.with_suffix('.pdf')}")
 
 
 if __name__ == "__main__":

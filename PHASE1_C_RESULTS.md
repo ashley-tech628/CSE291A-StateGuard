@@ -80,10 +80,13 @@ experiment. `ACC` is accidental; `ADV` is adversarial.
 For accidental cases alone, success was 3/24 without recovery, 24/24 after
 full restart, and 18/24 with verification. The six adversarial runs succeeded
 under every policy because the injected instructions were ignored; they do not
-establish recovery from an accepted attack. The [case success heatmap](results/c-phase1-llm-case-success.png)
-shows the table, while the [propagation and cost figure](results/c-phase1-llm-propagation-cost.png)
+establish recovery from an accepted attack. The [case success matrix](results/c-phase1-llm-case-success-paper.png)
+shows the table, while the [propagation and cost figure](results/c-phase1-llm-propagation-cost-paper.png)
 shows consumed/ignored/refused/blocked counts and the per-run token and latency
-distributions. The [case-level CSV](results/c-phase1-llm-detailed-cases.csv)
+distributions. Both figures are also available as vector
+[PDF](results/c-phase1-llm-case-success-paper.pdf) and
+[PDF](results/c-phase1-llm-propagation-cost-paper.pdf) for publication or slides.
+The [case-level CSV](results/c-phase1-llm-detailed-cases.csv)
 contains all 90 matched rows for independent analysis.
 
 ## Artifacts and reproduction
