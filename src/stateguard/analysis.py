@@ -187,6 +187,9 @@ def render_markdown(report: dict[str, Any], rows: Sequence[dict[str, Any]]) -> s
             + ", ".join(f"{name} x{n}" for name, n in sorted(invalid["reasons"].items())),
             "",
         ]
+    if not overall:
+        lines += ["## Overall", "", "No valid pairs; see excluded runs and their traces.", ""]
+        return "\n".join(lines)
     lines += [
         "## Overall",
         "",

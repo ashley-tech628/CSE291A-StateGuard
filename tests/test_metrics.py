@@ -154,6 +154,14 @@ def test_intervention_policy_does_not_count_as_schedule_mismatch(rows):
     assert report["overall"]["expectation_match_rate"] is None
 
 
+def test_report_renders_when_all_pairs_are_invalid(rows):
+    excluded = [invalidated(rows[0], reason="api_errors_in_clean_run")]
+    report = build_report(excluded)
+    text = render_markdown(report, excluded)
+    assert report["pairs"] == 0
+    assert "No valid pairs" in text
+
+
 def test_invalid_control_pair_is_not_counted_as_proven(rows):
     control = next(r for r in rows if r["expected_propagation"] == "ignored")
     others = [r for r in rows if r is not control]
