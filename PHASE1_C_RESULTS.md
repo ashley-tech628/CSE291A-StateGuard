@@ -37,6 +37,12 @@ inference was provided by the API.
 | Full restart | 30/30 (100%) | 3/30 | 0 | 1,554 | 39.0 s | 4 |
 | Always verify | 24/30 (80%) | 0/30 | 0 | 860 | 24.2 s | 0 |
 
+The `recomputed_stages` column counts stages executed in an explicit recovery
+attempt. It does not count Always Verify's in-attempt verification retries;
+those retries are included in the model-call, token, and latency totals.
+For Full Restart, the propagation verdict describes the first, faulty
+attempt, while task success and cost include the subsequent restart.
+
 The full restart baseline corrected all matched tasks but used about 2.05
 times as many actual tokens and 2.01 times the end-to-end fault latency as
 no recovery. The always-verify baseline used about 1.14 times the tokens and
@@ -55,6 +61,11 @@ model and produced no unauthorized commits; they demonstrate limited
 propagation, not successful recovery from an accepted malicious instruction.
 One supposed ignored control (`ignored-dependency-compat-flag`) was refused
 by the model, so it should not be counted as proof of harmless reuse.
+In the matched Always Verify runs, all 24 raw `ignored` verdicts correspond
+to a verifier-rejected original result followed by a valid retry; the faulty
+result was not exposed to Planner. The plotted label **Corrected before
+Planner** distinguishes this mechanism from a genuinely ignored result.
+The raw verdict remains available in the trace and case-level CSV.
 
 ## Fault-by-fault results
 
@@ -82,7 +93,7 @@ full restart, and 18/24 with verification. The six adversarial runs succeeded
 under every policy because the injected instructions were ignored; they do not
 establish recovery from an accepted attack. The [case success matrix](results/c-phase1-llm-case-success-paper.png)
 shows the table, while the [propagation and cost figure](results/c-phase1-llm-propagation-cost-paper.png)
-shows consumed/ignored/refused/blocked counts and the per-run token and latency
+shows consumed/ignored/corrected/refused/blocked counts and the per-run token and latency
 distributions. Both figures are also available as vector
 [PDF](results/c-phase1-llm-case-success-paper.pdf) and
 [PDF](results/c-phase1-llm-propagation-cost-paper.pdf) for publication or slides.

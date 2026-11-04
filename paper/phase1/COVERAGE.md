@@ -13,14 +13,14 @@
 | No recovery, full restart, oracle always verify | Section 3 | Real-model baselines |
 | Provider failures, clean-control failure, matched exclusions | Section 4 | 96 valid pairs; 30 common combinations |
 | Task success, unauthorized commits, tokens, latency, calls, recomputation | Table 1 | Measured |
-| Consumed/ignored/refused/blocked and cost distributions | Figure 1 | Measured; full-width vector plot |
+| Consumed/ignored/corrected/refused/blocked and cost distributions | Figure 1 | Measured; AV correction is derived from verifier traces; FR path precedes restart while cost includes it |
 | Persistent-port, compatibility control, separate adversarial analysis | Section 4 | Measured; ignored attacks are not recovery evidence |
 | Dependency-only vs state-aware recovery; 24-36 tasks and three topologies | Section 5 | Planned Phase 2 evaluation |
-| External updates, shared-resource conflicts, three ablations | Section 5 | Planned expanded evaluation |
-| Invalidation precision/recall, stale reuse, retained work, tracking overhead | Section 5 | Planned metrics; no invented results |
-| Optional Docker Compose and second model | Section 5 | Extensions |
-| Milestones through December 10 | Appendix paragraph | Planned |
-| Primary benchmark references and reproducibility artifacts | Final paragraph/references | Sources and repository link |
+| External updates, shared-resource conflicts, three ablations | Section 5 and appendix | Planned expanded evaluation |
+| Invalidation precision/recall, stale reuse, retained work, tracking overhead | Appendix | Planned metrics; no invented results |
+| Runtime and recovery architecture | Figure 2 | Implemented; selective replay not in real-model matrix |
+| Milestones through December 10 | Appendix table | Planned |
+| Primary benchmark references and reproducibility artifacts | Appendix/references | Sources and repository link |
 
 The two-page main text combines the whole-project proposal with Phase 1 evidence; page three contains the appendix and references.
 It does not claim that planned experiments, selective-recovery LLM comparisons,

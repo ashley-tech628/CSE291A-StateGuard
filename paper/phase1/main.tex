@@ -28,13 +28,13 @@
 \maketitle
 \vspace{-2.5em}
 \begin{abstract}
-\sg{} investigates failure propagation and selective recovery under changing shared state. We implement a versioned deployment runtime and record 99 real-model clean/fault pairs on AWS. Across 30 combinations valid for all policies, completion is 30\% without recovery, 100\% with full restart, and 80\% with verification. Restart approximately doubles tokens and latency. We report Phase 1 evidence and propose selective-recovery evaluation.
+\sg{} studies failure propagation and state-consistent recovery in a tool-using deployment workflow. We implement a versioned runtime and record 99 real-model clean/fault pairs on AWS. Among 30 case/seed combinations valid under all three policies, task completion is 30\% without recovery, 100\% after full restart, and 80\% with verification. Restart approximately doubles tokens and latency on this workload. These Phase 1 measurements establish baselines for a later selective-recovery comparison.
 \end{abstract}
 \vspace{-0.5em}
 \section{Research question and workflow}
 An incorrect port can propagate from analysis into a plan and committed configuration. Replanning leaves the write behind; snapshot rollback may erase a later administrator update. Our questions are: \textbf{RQ1}, which message and state dependencies carry failures; \textbf{RQ2}, which work remains reusable after legitimate updates; and \textbf{RQ3}, when does selective recovery save more than its bookkeeping costs?
 
-A representative trace begins with an obsolete guide claiming that the API can use database port 3306. The Dependency result passes this claim to the Planner, which writes the resulting API configuration. Meanwhile, a worker scales independently and an administrator raises API replicas. Correct recovery must repair the port while preserving both valid changes, provided the resulting CPU budget still holds. This trace makes consumption, committed effects, and intervening state changes separately observable.
+Consider a stale claim that an obsolete database port is valid. If the Planner acts on it, the Executor can commit an invalid API configuration while a worker scales independently and an administrator changes API replicas. Recovery must repair the port, preserve valid later writes, and recheck the shared CPU budget. The workload records result delivery, Planner consumption, and committed tool effects separately; a received message alone is not proof of propagation.
 
 Config, Dependency, and Resource Agents analyze configuration, versioned knowledge, and capacity. A Planner consumes structured results; a controlled Executor modifies API, worker, and database state. Checkers enforce compatibility, resource budgets, deployment goals, and protected authentication/audit fields. Python, Pydantic, SQLite, a CLI runner, and pytest implement the system. A TritonAI adapter logs prompts, responses, tokens, timing, and retries; deterministic agents isolate runtime semantics.
 
@@ -56,7 +56,7 @@ The integrated suite passes \textbf{156 tests}, covering independent-result reus
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/propagation-cost.pdf}
-\caption{Matched fault runs ($n=30$/policy). (a) Propagation, not final success. (b--c) Tokens and latency, including recovery/pacing. Dots: case/seed combinations; boxes: quartiles/median; whiskers: observations within $1.5\times$ IQR. Row order follows (a). Cases are heterogeneous, not independent task samples.}
+\caption{Matched fault runs ($n=30$/policy). (a) Verdict after AV verification but before FR restart. (b--c) Fault-side tokens and latency include retries, restart, and pacing. Dots are runs; boxes show median/IQR.}
 \label{fig:propagation-cost}
 \end{figure*}
 
@@ -74,7 +74,7 @@ Of 99 recorded pairs, 96 are valid: two FR pairs (seed 7) have HTTP 422 errors; 
 
 \begin{table}[h]
 \centering\small
-\caption{Matched outcomes; fault-side cost includes recovery and excludes the separately logged clean control.}
+\caption{Matched fault-side outcomes. Recomputed stages exclude AV verification retries; calls, tokens, and latency include retries and FR restart.}
 \begin{tabular}{lrrr}\toprule
 Metric & NR & FR & AV\\\midrule
 Completed tasks & 9/30 & 30/30 & 24/30\\
@@ -87,20 +87,24 @@ Mean recomputed stages & 0 & 4 & 0\\\bottomrule
 \label{tab:results}
 \end{table}
 
-FR completes all matched tasks at $2.05\times$ NR's tokens and $2.01\times$ its latency. AV reaches 80\% completion at $1.14\times$ the tokens and $1.24\times$ the latency. Figure~\ref{fig:propagation-cost} shows distributions; latency includes pacing, not just model compute.
+FR completes all matched tasks at $2.05\times$ NR's tokens and $2.01\times$ its latency. AV reaches 80\% completion at $1.14\times$ the tokens and $1.24\times$ the latency. Figure~\ref{fig:propagation-cost} shows the per-run distributions; latency includes pacing, not just model compute.
 
-NR has 4 consumed, 9 ignored, 11 refused, and 6 blocked injections. All six adversarial runs succeed because instructions are ignored; zero unauthorized commits does not show recovery from an accepted attack. Model calls can change propagation verdicts.
+NR has 4 consumed, 9 ignored, 11 refused, and 6 blocked injections. Under AV, the 24 raw ``ignored'' verdicts all follow a failed verification and a valid retry; the faulty outputs never reach Planner. Figure~\ref{fig:propagation-cost} therefore labels these \emph{corrected before Planner}, retaining the raw verdicts in the traces. Under NR, all six adversarial runs succeed because the model ignores the injected instructions. Zero unauthorized commits does not establish recovery from an accepted attack.
 
 The persistent-port case supplies the clearest propagation path: NR consumes the error with 0/3 successes, FR succeeds 3/3, and AV remains blocked 0/3. AV also fails all three compatibility-flag controls, which are refused rather than ignored. Among accidental cases, completion is 3/24, 24/24, and 18/24 for NR, FR, and AV. Aggregate scores therefore conceal systematic case-level failures.
 
 \section{Remaining proposal and evaluation plan}
 This pilot covers one task/topology and constrained tools. Detection, tracking overhead, and selective-recovery performance remain unevaluated. Phase 2 will compare dependency-only and state-aware replay against FR and AV under identical fault identities, event schedules, and budgets. We target 24--36 tasks, adjusted after a cost pilot, with chain, fan-out, and diamond dependencies; unchanged state, unrelated updates, same-field conflicts, and shared-resource contention. We will separate development and evaluation workloads.
 
-Ablations remove field-level reads, version checks, and action deduplication. Checkers and replay oracles will assess invalidation precision/recall, stale reuse, retained work, preserved updates, and blocked outcomes. Cost analysis includes tokens, recomputation, latency, and tracking overhead.
-
 \clearpage
 \section*{Appendix: Milestones and reproducibility}
 \vspace{-0.5em}
+\begin{center}
+\includegraphics[width=.96\columnwidth]{figures/architecture.pdf}
+\captionof{figure}{Implemented workflow and recovery path. The model adapter serves analysis agents and Planner; the harness supplies the faulty result ID. The real-model matrix evaluates NR, FR, and AV, not selective replay.}
+\label{fig:architecture}
+\end{center}
+\vspace{-0.8em}
 \begin{table}[h]
 \centering\small
 \caption{Remaining project milestones. Dates are in 2026.}
@@ -118,8 +122,14 @@ Dec. 5--10 & Reproduce figures; submit code and report.\\\bottomrule
 \paragraph{Reproducibility and evidence boundary.}
 The repository provides workload fingerprints, fault schedules, source revision, model and retry settings, per-pair validity, checker outcomes, and paired traces. Its analysis scripts regenerate matched results and case-level figures. The 156-test suite checks runtime semantics separately from the LLM pilot. The real-model matrix measures NR, FR, and AV; selective replay, automatic detection, tracking overhead, and arbitrary remote effects remain outside its evidence.
 
+\paragraph{Phase 2 measurement.}
+Ablations remove field-level reads, version checks, and action deduplication. Checkers and replay oracles will assess invalidation precision/recall, stale reuse, retained work, preserved updates, and blocked outcomes. Cost analysis includes tokens, recomputation, latency, and tracking overhead.
+
+\newpage
 \paragraph{Related work.}
 AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} motivate measuring both task completion and adversarial behavior. RDDs~\cite{rdd} show how lineage can guide recomputation, while Falkirk Wheel~\cite{falkirk} studies selective rollback in dataflows. Sagas~\cite{sagas} motivate explicit treatment of effects that cannot be undone by restoring local state. Our contribution targets agent outputs tied to versioned, mutable tool state. Code, manifests, traces, and plots are available in the \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository}.
+\paragraph{Threats to validity.}
+The oracle verifier accesses simulated ground truth, so its cost and coverage do not model a deployable detector. Seed labels fix schedules but do not control provider sampling. Completion rates and latency are descriptive for one topology, one model, and one pacing rule; they do not support statistical generalization to other agent systems. Tests of lost acknowledgements and conflicting writes establish local runtime behavior, not guarantees for arbitrary remote tools.
 \vspace{-0.5em}
 \begin{thebibliography}{6}\setlength{\itemsep}{0pt}\small
 \bibitem{agentdojo} E. Debenedetti et al. AgentDojo: A dynamic environment to evaluate prompt injection attacks and defenses for LLM agents. \emph{arXiv:2406.13352}, 2024.

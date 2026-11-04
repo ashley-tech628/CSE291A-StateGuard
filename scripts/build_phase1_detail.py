@@ -18,7 +18,7 @@ from summarize_matched_phase1 import DIRECTORY_LABELS, POLICIES, summarize
 FIELDS = (
     "seed", "case_id", "fault_class", "fault_type", "target_agent", "policy",
     "clean_success", "fault_success", "fault_exposed", "fault_consumed",
-    "propagation_verdict", "unauthorized_attempts", "unauthorized_commits",
+    "propagation_verdict", "display_verdict", "unauthorized_attempts", "unauthorized_commits",
     "inference_calls_fault", "actual_tokens_fault", "latency_ms_fault",
     "recomputed_stages", "retained_results", "recovery_status",
 )
@@ -54,11 +54,38 @@ def matched_rows(root: Path, seeds: list[int]) -> tuple[dict, list[dict], list[s
             with path.open(newline="", encoding="utf-8") as handle:
                 for row in csv.DictReader(handle):
                     if row["case_id"] in common:
-                        selected.append({field: row[field] for field in FIELDS})
+                        selected_row = {field: row[field] for field in FIELDS
+                                        if field != "display_verdict"}
+                        selected_row["display_verdict"] = _display_verdict(
+                            root, seed, policy, row
+                        )
+                        selected.append(selected_row)
     if len(selected) != sum(len(v) for v in summary["common_valid_cases_by_seed"].values()) * len(POLICIES):
         raise ValueError("matched row count disagrees with manifest and validity gate")
     order = [case for case in order if any(row["case_id"] == case for row in selected)]
     return summary, selected, order
+
+
+def _display_verdict(root: Path, seed: int, policy: str, row: dict) -> str:
+    """Distinguish verifier correction from a genuinely ignored fault.
+
+    The stored propagation verdict remains unchanged. The extra display label
+    is derived from the paired trace so a future AV run that actually ignores
+    a fault is not mislabeled as corrected.
+    """
+    verdict = row["propagation_verdict"]
+    if policy != "always_verify" or verdict != "ignored":
+        return verdict
+    pair_path = (root / f"c-phase1-llm-{DIRECTORY_LABELS[policy]}-seed{seed}"
+                 / "pairs" / f"{row['case_id']}__{policy}__seed-{seed}" / "paired.json")
+    pair = json.loads(pair_path.read_text(encoding="utf-8"))
+    events = pair["fault"]["trace"]["verification_events"]
+    corrected = any(event.get("agent_id") == row["target_agent"]
+                    and event["valid"] is False and event.get("retry_valid") is True
+                    for event in events)
+    if corrected and not pair["comparison"]["fault_exposed_to_planner"]:
+        return "corrected"
+    return verdict
 
 
 def write_detail(rows: list[dict], path: Path) -> None:
@@ -128,9 +155,12 @@ def plot_propagation_and_cost(rows: list[dict], path: Path, *, compact: bool = F
         labels = [LABELS[p] for p in POLICIES]
         left = [0] * len(POLICIES)
         verdict_colors = {"consumed": "#C05A46", "ignored": "#4E79A7",
-                          "refused": "#E3B35C", "blocked": "#91979D"}
-        for verdict in ("consumed", "ignored", "refused", "blocked"):
-            counts = [sum(row["policy"] == policy and row["propagation_verdict"] == verdict
+                          "corrected": "#168077", "refused": "#E3B35C",
+                          "blocked": "#91979D"}
+        verdict_order = ("consumed", "ignored", "corrected", "refused", "blocked")
+        for verdict in verdict_order:
+            counts = [sum(row["policy"] == policy
+                          and row.get("display_verdict", row["propagation_verdict"]) == verdict
                           for row in rows) for policy in POLICIES]
             axes[0].barh(positions, counts, left=left, height=.52,
                          color=verdict_colors[verdict], edgecolor="white", linewidth=.5)
@@ -138,7 +168,8 @@ def plot_propagation_and_cost(rows: list[dict], path: Path, *, compact: bool = F
                 if count:
                     axes[0].text(start + count / 2, y, str(count), ha="center",
                                  va="center", fontsize=7.5, weight="bold",
-                                 color="white" if verdict in ("consumed", "ignored") else "#26333C")
+                                 color="white" if verdict in ("consumed", "ignored", "corrected")
+                                 else "#26333C")
             left = [a + b for a, b in zip(left, counts)]
         axes[0].set_xlim(0, len(rows) // len(POLICIES))
         axes[0].set_xlabel(f"Fault runs (n = {len(rows) // len(POLICIES)})")
@@ -185,10 +216,14 @@ def plot_propagation_and_cost(rows: list[dict], path: Path, *, compact: bool = F
             fig.subplots_adjust(left=.13, right=.99, top=.84, bottom=.30, wspace=.20)
         else:
             fig.subplots_adjust(left=.11, right=.99, top=.80, bottom=.24, wspace=.49)
-        fig.legend(handles=[Patch(facecolor=verdict_colors[v], label=v.title())
-                            for v in ("consumed", "ignored", "refused", "blocked")],
-                   loc="lower left", bbox_to_anchor=(.105, .035), ncol=4,
-                   frameon=False, fontsize=7.5)
+        legend_labels = {"consumed": "Consumed", "ignored": "Ignored",
+                         "corrected": "Corrected before Planner (AV)",
+                         "refused": "Refused", "blocked": "Blocked"}
+        fig.legend(handles=[Patch(facecolor=verdict_colors[v], label=legend_labels[v])
+                            for v in verdict_order],
+                   loc="lower left", bbox_to_anchor=(.105, .035), ncol=5,
+                   frameon=False, fontsize=7 if compact else 7.5,
+                   columnspacing=.9 if compact else 1.5, handlelength=1.2)
         _save_figure(fig, path)
         plt.close(fig)
 
