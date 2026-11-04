@@ -105,7 +105,7 @@ This pilot covers one task/topology and constrained tools. Detection, tracking o
 \captionof{figure}{StateGuard runtime. A shared TritonAI adapter serves analysis agents and Planner; the runtime records versioned writes and provenance. Recovery checks a known faulty result before replay or blocking.}
 \label{fig:architecture}
 \end{minipage}
-\vspace{0.5em}
+\par\vspace{0.8em}
 \noindent\begin{minipage}{\columnwidth}
 \centering
 \captionof{table}{Project milestones (2026).}
@@ -125,7 +125,6 @@ Manifests, paired traces, checker outcomes, and analysis scripts reproduce the m
 \paragraph{Phase 2 evaluation.}
 Chain, fan-out, and diamond workloads will test external updates and shared-state conflicts. Ablations remove field reads, version checks, and action deduplication. We will measure invalidation precision/recall, preserved work, blocked effects, tokens, latency, and tracking overhead.
 
-\newpage
 \paragraph{Related work.}
 AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} evaluate agent security; our traces additionally connect faulty outputs to state writes. RDD lineage~\cite{rdd} and lineage-driven fault injection~\cite{ldfi} motivate causal slices, while Falkirk Wheel~\cite{falkirk} studies selective rollback. Optimistic concurrency control~\cite{occ} informs conditional writes. Sagas~\cite{sagas} and rollback-recovery protocols~\cite{rollback} make clear why external effects need explicit treatment.
 
