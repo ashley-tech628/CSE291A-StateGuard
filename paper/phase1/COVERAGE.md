@@ -18,7 +18,7 @@
 | Dependency-only vs state-aware recovery; 24-36 tasks and three topologies | Section 5 | Planned Phase 2 evaluation |
 | External updates, shared-resource conflicts, three ablations | Section 5 and appendix | Planned expanded evaluation |
 | Invalidation precision/recall, stale reuse, retained work, tracking overhead | Appendix | Planned metrics; no invented results |
-| Runtime and recovery architecture | Figure 2 (full-width appendix) | Implemented; selective replay not in real-model matrix |
+| Runtime and recovery architecture | Figure 2 (single-column appendix) | Implemented; selective replay not in real-model matrix |
 | Milestones through December 10 | Appendix table | Planned |
 | Primary benchmark references and reproducibility artifacts | Appendix/references | Sources and repository link |
 

@@ -24,7 +24,7 @@ pdflatex main.tex
 
 Tectonic 0.17.0 also successfully compiles the source with automatic package
 downloads. Packages include newtxtext/newtxmath, geometry, microtype, graphicx,
-booktabs, multicol, hyperref, and caption. The bibliography is inline and needs no BibTeX.
+booktabs, hyperref, and caption. The bibliography is inline and needs no BibTeX.
 
 Both figures are vector PDFs. To rebuild them from the repository root, install the
 evaluation dependencies and run `python paper/phase1/build_figure.py` and
@@ -47,7 +47,7 @@ deployment task, not significance claims across deployment workloads.
 
 The report includes the three-panel propagation, token-cost, and latency figure
 as a full-width vector graphic, reformatted for readable two-column printing.
-The appendix includes a full-width vector runtime architecture diagram. In the result
+The appendix includes a single-column vector runtime architecture diagram. In the result
 figure, the 24 AV outputs labeled `corrected before Planner` were classified
 from verification traces; the stored raw propagation verdicts remain `ignored`.
 FR propagation is shown before restart, while its cost includes the restart.

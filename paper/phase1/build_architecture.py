@@ -1,4 +1,4 @@
-"""Render the two-lane StateGuard architecture as a full-width vector figure."""
+"""Build a single-column vector architecture figure for the Phase 1 report."""
 
 from pathlib import Path
 
@@ -7,64 +7,48 @@ from matplotlib.patches import FancyArrowPatch, Rectangle
 
 
 OUT = Path(__file__).parent / "figures" / "architecture"
-INK = "#20323D"
-MUTED = "#536877"
-RULE = "#AAB8C0"
-ACCENT = "#11766D"
+INK = "#243744"
+FORWARD = "#496371"
+RECOVERY = "#15736B"
 
 
 def main() -> None:
     with plt.rc_context({"font.family": "DejaVu Sans", "pdf.fonttype": 42}):
-        fig, ax = plt.subplots(figsize=(7.0, 1.88))
-        ax.set_xlim(-1, 101)
-        ax.set_ylim(-1, 27)
+        fig, ax = plt.subplots(figsize=(3.26, 2.48))
+        ax.set(xlim=(0, 3.26), ylim=(0, 2.5))
         ax.axis("off")
 
-        def box(x: float, y: float, w: float, h: float, label: str,
-                *, recovery: bool = False, size: float = 8.0) -> None:
-            ax.add_patch(Rectangle(
-                (x, y), w, h, linewidth=.85,
-                edgecolor=ACCENT if recovery else MUTED,
-                facecolor="#F1F7F5" if recovery else "#F5F7F8",
-            ))
-            ax.text(x + w / 2, y + h / 2, label, ha="center", va="center",
-                    color=INK, fontsize=size, linespacing=1.18)
+        def box(x: float, y: float, width: float, label: str,
+                *, color: str = FORWARD, fill: str = "#FFFFFF") -> None:
+            ax.add_patch(Rectangle((x, y), width, .34, linewidth=.7,
+                                   edgecolor=color, facecolor=fill))
+            ax.text(x + width / 2, y + .17, label, ha="center", va="center",
+                    fontsize=7.8, color=INK)
 
-        def arrow(a: tuple[float, float], b: tuple[float, float],
-                  *, recovery: bool = False, dashed: bool = False) -> None:
-            ax.add_patch(FancyArrowPatch(
-                a, b, arrowstyle="-|>", mutation_scale=8, linewidth=.95,
-                color=ACCENT if recovery else MUTED,
-                linestyle="--" if dashed else "-",
-                shrinkA=2, shrinkB=2,
-            ))
+        def arrow(x1: float, y1: float, x2: float, y2: float,
+                  *, color: str = FORWARD) -> None:
+            ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2),
+                                         arrowstyle="-|>", mutation_scale=7,
+                                         linewidth=.75, color=color,
+                                         shrinkA=0, shrinkB=1))
 
-        ax.text(0, 25.2, "FORWARD EXECUTION", color=INK, fontsize=7.7,
-                fontweight="bold", va="center")
-        ax.text(100, 25.2, "TritonAI model adapter: agents + Planner",
-                color=MUTED, fontsize=7.0, ha="right", va="center")
-        ax.plot([0, 100], [23.7, 23.7], color=RULE, linewidth=.6)
+        box(.08, 2.08, 3.10, "Task request + versioned guide")
+        box(.08, 1.58, 3.10, "Config / Dependency / Resource agents")
+        box(.08, 1.08, 1.40, "Planner")
+        box(1.80, 1.08, 1.38, "Tool executor")
+        box(.08, .58, 3.10, "SQLite field versions + action ledger",
+            fill="#F0F4F6")
+        box(.08, .08, 1.57, "Trace + provenance", color=RECOVERY,
+            fill="#F0F7F5")
+        box(1.93, .08, 1.25, "Replay / block", color=RECOVERY,
+            fill="#F0F7F5")
 
-        box(0, 15.2, 16, 6.7, "Task request\n+ guide version", size=7.2)
-        box(20, 15.2, 25, 6.7, "Config  |  Dependency\nResource agents", size=7.8)
-        box(49, 15.2, 12, 6.7, "Planner")
-        box(65, 15.2, 14, 6.7, "Controlled\nexecutor", size=7.5)
-        box(83, 15.2, 17, 6.7, "Versioned state\n+ action ledger", size=7.5)
-        for x1, x2 in ((16, 20), (45, 49), (61, 65), (79, 83)):
-            arrow((x1, 18.55), (x2, 18.55))
-
-        ax.text(0, 11.8, "FAULT RECOVERY", color=ACCENT, fontsize=7.7,
-                fontweight="bold", va="center")
-        ax.plot([0, 100], [10.4, 10.4], color=RULE, linewidth=.6)
-
-        box(18, 1.1, 26, 6.8, "Trace + typed\nprovenance", recovery=True)
-        box(48, 1.1, 21, 6.8, "Impact +\nversion checks", recovery=True)
-        box(74, 1.1, 26, 6.8, "Conditional replay\nor explicit block", recovery=True)
-        arrow((44, 4.5), (48, 4.5), recovery=True)
-        arrow((69, 4.5), (74, 4.5), recovery=True)
-        arrow((32.5, 15.2), (32.5, 8.0))
-        arrow((91.5, 15.2), (91.5, 8.0))
-        arrow((77, 8.0), (72, 15.0), recovery=True, dashed=True)
+        arrow(1.63, 2.08, 1.63, 1.92)
+        arrow(.78, 1.58, .78, 1.42)
+        arrow(1.48, 1.25, 1.80, 1.25)
+        arrow(2.49, 1.08, 2.49, .92)
+        arrow(.86, .58, .86, .42)
+        arrow(1.65, .25, 1.93, .25, color=RECOVERY)
 
         fig.savefig(OUT.with_suffix(".pdf"), bbox_inches="tight", pad_inches=.025)
         fig.savefig(OUT.with_suffix(".png"), dpi=320, bbox_inches="tight", pad_inches=.025)
