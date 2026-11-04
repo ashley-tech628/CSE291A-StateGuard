@@ -24,12 +24,12 @@ pdflatex main.tex
 
 Tectonic 0.17.0 also successfully compiles the source with automatic package
 downloads. Packages include newtxtext/newtxmath, geometry, microtype, graphicx,
-booktabs, hyperref, and caption. The bibliography is inline and needs no BibTeX.
+booktabs, multicol, hyperref, and caption. The bibliography is inline and needs no BibTeX.
 
 Both figures are vector PDFs. To rebuild them from the repository root, install the
 evaluation dependencies and run `python paper/phase1/build_figure.py` and
 `python paper/phase1/build_architecture.py`.
-It validates manifests, reads the nine baseline summaries via the common-valid-pair gate,
+The result-figure builder validates manifests, reads the nine baseline summaries via the common-valid-pair gate,
 and checks the paired AV traces to distinguish correction from ignored faults. The matched experiment source
 is revision `6930ac8`. All result values are descriptive measurements on one
 deployment task, not significance claims across deployment workloads.
@@ -39,7 +39,7 @@ deployment task, not significance claims across deployment workloads.
 - Integrated code: 156 tests pass.
 - Final PDF: three letter-sized pages (two main-text pages plus appendix/references); all pages visually checked.
 - No overfull text boxes in the final TeX log.
-- Six references checked against primary publisher, author, and repository pages.
+- Nine references checked against primary publisher, author, and repository pages.
 - The original proposal's broader task/topology and ablation goals remain
   Phase 2 work; they are not claimed as completed experiments.
 
@@ -47,7 +47,7 @@ deployment task, not significance claims across deployment workloads.
 
 The report includes the three-panel propagation, token-cost, and latency figure
 as a full-width vector graphic, reformatted for readable two-column printing.
-The appendix includes a compact runtime architecture diagram. In the result
+The appendix includes a full-width vector runtime architecture diagram. In the result
 figure, the 24 AV outputs labeled `corrected before Planner` were classified
 from verification traces; the stored raw propagation verdicts remain `ignored`.
 FR propagation is shown before restart, while its cost includes the restart.

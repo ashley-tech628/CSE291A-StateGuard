@@ -1,7 +1,7 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
 \usepackage[letterpaper,textwidth=7in,textheight=9in,centering]{geometry}
 \usepackage{newtxtext,newtxmath}
-\usepackage{graphicx,booktabs,amsmath,microtype,url,array}
+\usepackage{graphicx,booktabs,amsmath,microtype,url,array,multicol}
 \usepackage[colorlinks=true,urlcolor=blue,citecolor=black,linkcolor=black]{hyperref}
 \usepackage[font=small,labelfont=bf]{caption}
 \setlength{\columnsep}{0.25in}
@@ -96,47 +96,53 @@ The persistent-port case supplies the clearest propagation path: NR consumes the
 \section{Remaining proposal and evaluation plan}
 This pilot covers one task/topology and constrained tools. Detection, tracking overhead, and selective-recovery performance remain unevaluated. Phase 2 will compare dependency-only and state-aware replay against FR and AV under identical fault identities, event schedules, and budgets. We target 24--36 tasks, adjusted after a cost pilot, with chain, fan-out, and diamond dependencies; unchanged state, unrelated updates, same-field conflicts, and shared-resource contention. We will separate development and evaluation workloads.
 
-\clearpage
-\section*{Appendix: Milestones and reproducibility}
+\onecolumn
+\section*{Appendix: Architecture, milestones, and references}
 \vspace{-0.5em}
 \begin{center}
-\includegraphics[width=.96\columnwidth]{figures/architecture.pdf}
-\captionof{figure}{Implemented workflow and recovery path. The model adapter serves analysis agents and Planner; the harness supplies the faulty result ID. The real-model matrix evaluates NR, FR, and AV, not selective replay.}
+\includegraphics[width=.99\textwidth]{figures/architecture.pdf}
+\captionof{figure}{StateGuard runtime. The harness supplies the faulty result identity; replay follows provenance and field-version checks. The Phase 1 real-model matrix evaluates NR, FR, and AV, while selective replay is tested with deterministic tools.}
 \label{fig:architecture}
 \end{center}
-\vspace{-0.8em}
-\begin{table}[h]
-\centering\small
-\caption{Remaining project milestones. Dates are in 2026.}
-\begin{tabular}{@{}p{.94in}>{\raggedright\arraybackslash}p{2.15in}@{}}\toprule
+\vspace{-0.7em}
+\begin{multicols}{2}
+\raggedcolumns
+\noindent\begin{minipage}{\columnwidth}
+\centering
+\captionof{table}{Project milestones (2026).}
+\begin{tabular}{@{}p{1.05in}>{\raggedright\arraybackslash}p{2.01in}@{}}\toprule
 When & Deliverable and acceptance check\\\midrule
-Nov. 3--4 & Freeze code, traces, and matched results.\\\addlinespace[2pt]
-Nov. 5--15 & Add three graph topologies; validate event replay.\\\addlinespace[2pt]
-Nov. 16--25 & Compare two replay methods under matched faults.\\\addlinespace[2pt]
-\mbox{Nov. 26--Dec. 4} & Measure overhead, stale reuse, and conflicts.\\\addlinespace[2pt]
-Dec. 5--10 & Reproduce figures; submit code and report.\\\bottomrule
+Nov. 3--15 & Freeze artifacts; expand graph and event cases.\\
+Nov. 16--25 & Compare replay methods on matched faults.\\
+Nov. 26--Dec. 4 & Measure precision, conflicts, cost, and overhead.\\
+\mbox{Dec.~5--10} & Reproduce results; submit code and final report.\\\bottomrule
 \end{tabular}
 \label{tab:milestones}
-\end{table}
+\end{minipage}
 
-\paragraph{Reproducibility and evidence boundary.}
-The repository provides workload fingerprints, fault schedules, source revision, model and retry settings, per-pair validity, checker outcomes, and paired traces. Its analysis scripts regenerate matched results and case-level figures. The 156-test suite checks runtime semantics separately from the LLM pilot. The real-model matrix measures NR, FR, and AV; selective replay, automatic detection, tracking overhead, and arbitrary remote effects remain outside its evidence.
+\paragraph{Evidence boundary.}
+Manifests, paired traces, checker outcomes, and analysis scripts reproduce the matched figures. The 156-test suite exercises controlled replay; the real-model matrix measures NR, FR, and AV. Detection, selective-replay performance, and arbitrary remote effects remain unmeasured.
 
-\paragraph{Phase 2 measurement.}
-Ablations remove field-level reads, version checks, and action deduplication. Checkers and replay oracles will assess invalidation precision/recall, stale reuse, retained work, preserved updates, and blocked outcomes. Cost analysis includes tokens, recomputation, latency, and tracking overhead.
+\paragraph{Phase 2 evaluation.}
+Chain, fan-out, and diamond workloads will test external updates and shared-state conflicts. Ablations remove field reads, version checks, and action deduplication. We will measure invalidation precision/recall, preserved work, blocked effects, tokens, latency, and tracking overhead.
 
-\newpage
+\columnbreak
 \paragraph{Related work.}
-AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} motivate measuring both task completion and adversarial behavior. RDDs~\cite{rdd} show how lineage can guide recomputation, while Falkirk Wheel~\cite{falkirk} studies selective rollback in dataflows. Sagas~\cite{sagas} motivate explicit treatment of effects that cannot be undone by restoring local state. Our contribution targets agent outputs tied to versioned, mutable tool state. Code, manifests, traces, and plots are available in the \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository}.
-\paragraph{Threats to validity.}
-The oracle verifier accesses simulated ground truth, so its cost and coverage do not model a deployable detector. Seed labels fix schedules but do not control provider sampling. Completion rates and latency are descriptive for one topology, one model, and one pacing rule; they do not support statistical generalization to other agent systems. Tests of lost acknowledgements and conflicting writes establish local runtime behavior, not guarantees for arbitrary remote tools.
-\vspace{-0.5em}
-\begin{thebibliography}{6}\setlength{\itemsep}{0pt}\small
+AgentDojo~\cite{agentdojo}, TAMAS~\cite{tamas}, and A2ASecBench~\cite{a2a} evaluate agent security; our traces additionally connect faulty outputs to state writes. RDD lineage~\cite{rdd} and lineage-driven fault injection~\cite{ldfi} motivate causal slices, while Falkirk Wheel~\cite{falkirk} studies selective rollback. Optimistic concurrency control~\cite{occ} informs conditional writes. Sagas~\cite{sagas} and rollback-recovery protocols~\cite{rollback} make clear why external effects need explicit treatment.
+
+\paragraph{Validity and artifacts.}
+AV reads simulated truth, so it is an oracle baseline. Seeds fix injection schedules, not provider sampling; results cover one task, topology, model, and pacing rule. Controlled-tool tests do not establish guarantees for remote services. Code and traces are in the \href{https://github.com/ashley-tech628/CSE291A-StateGuard}{artifact repository}.
+
+\begin{thebibliography}{9}\setlength{\itemsep}{0pt}\small
 \bibitem{agentdojo} E. Debenedetti et al. AgentDojo: A dynamic environment to evaluate prompt injection attacks and defenses for LLM agents. \emph{arXiv:2406.13352}, 2024.
 \bibitem{tamas} I. Kavathekar et al. TAMAS: Benchmarking adversarial risks in multi-agent LLM systems. \emph{ACL}, 2026.
 \bibitem{a2a} T. Li et al. A2ASecBench: A protocol-aware security benchmark for agent-to-agent multi-agent systems. \emph{ICLR}, 2026.
 \bibitem{rdd} M. Zaharia et al. Resilient distributed datasets: A fault-tolerant abstraction for in-memory cluster computing. \emph{NSDI}, 2012.
+\bibitem{ldfi} P. Alvaro, J. Rosen, and J. M. Hellerstein. Lineage-driven fault injection. \emph{SIGMOD}, pp. 331--346, 2015.
 \bibitem{falkirk} M. Isard and M. Abadi. Falkirk Wheel: Rollback recovery for dataflow systems. \emph{arXiv:1503.08877}, 2015.
+\bibitem{occ} H. T. Kung and J. T. Robinson. On optimistic methods for concurrency control. \emph{ACM TODS} 6(2):213--226, 1981.
 \bibitem{sagas} H. Garcia-Molina and K. Salem. Sagas. \emph{SIGMOD}, 1987.
+\bibitem{rollback} E. N. Elnozahy et al. A survey of rollback-recovery protocols in message-passing systems. \emph{ACM Computing Surveys} 34(3):375--408, 2002.
 \end{thebibliography}
+\end{multicols}
 \end{document}
